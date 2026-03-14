@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { databaseConfigFactory } from './config/database.config';
 import blockchainConfig from './config/blockchain.config';
+import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { EscrowModule } from './modules/escrow/escrow.module';
 import { SettlementModule } from './modules/settlement/settlement.module';
 import { StreamingModule } from './modules/streaming/streaming.module';
@@ -20,6 +21,7 @@ import { HealthModule } from './modules/health/health.module';
       inject: [ConfigService],
       useFactory: databaseConfigFactory,
     }),
+    BlockchainModule,
     EscrowModule,
     SettlementModule,
     StreamingModule,

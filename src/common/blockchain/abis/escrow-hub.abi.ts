@@ -1,0 +1,15 @@
+export const ESCROW_HUB_ABI = [
+  'function openEscrow(bytes32 escrowId, address agentB, uint256 budgetLimit, bool verificationRequired, uint256 ttl) external payable',
+  'function settleBatch(bytes32 escrowId, bytes32 receiptsHash, uint256 totalAmount) external',
+  'function claimStream(bytes32 escrowId, uint256 usageDelta) external',
+  'function closeEscrow(bytes32 escrowId) external',
+  'function emergencyClose(bytes32 escrowId) external',
+  'function freezeOnDispute(bytes32 escrowId) external',
+  'function escrows(bytes32) external view returns (address agentA, address agentB, uint256 deposit, uint256 budgetLimit, uint256 spent, bool verificationRequired, uint256 ttl, uint256 createdAt, bool active, bool disputed)',
+  'function feePercent() external view returns (uint256)',
+  'event EscrowOpened(bytes32 indexed escrowId, address indexed agentA, address agentB, uint256 deposit, uint256 budgetLimit, uint256 ttl)',
+  'event BatchSettled(bytes32 indexed escrowId, bytes32 receiptsHash, uint256 totalAmount)',
+  'event StreamClaimed(bytes32 indexed escrowId, address indexed agentB, uint256 usageDelta, uint256 newSpent)',
+  'event EscrowClosed(bytes32 indexed escrowId, uint256 refund)',
+  'event EscrowDisputed(bytes32 indexed escrowId)',
+];
