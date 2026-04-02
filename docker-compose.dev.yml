@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  payment-rail:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - '3003:3003'
+      - '9229:9229'
+    volumes:
+      - ./src:/app/src
+      - ./test:/app/test
+    environment:
+      - NODE_ENV=development
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=payment_db
+      - RPC_URL=http://anvil:8545
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payment_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ['anvil', '--host', '0.0.0.0']
+    ports:
+      - '8545:8545'
+
+volumes:
+  pgdata:
