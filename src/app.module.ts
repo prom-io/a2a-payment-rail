@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { databaseConfigFactory } from './config/database.config';
+import { throttlerConfigFactory } from './config/throttler.config';
 import blockchainConfig from './config/blockchain.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { EscrowModule } from './modules/escrow/escrow.module';
@@ -21,6 +24,10 @@ import { HealthModule } from './modules/health/health.module';
       inject: [ConfigService],
       useFactory: databaseConfigFactory,
     }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: throttlerConfigFactory,
+    }),
     BlockchainModule,
     EscrowModule,
     SettlementModule,
@@ -28,6 +35,12 @@ import { HealthModule } from './modules/health/health.module';
     VerdictsModule,
     ReceiptsModule,
     HealthModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
