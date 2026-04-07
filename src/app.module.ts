@@ -7,6 +7,7 @@ import { databaseConfigFactory } from './config/database.config';
 import { throttlerConfigFactory } from './config/throttler.config';
 import blockchainConfig from './config/blockchain.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
+import { AuthModule } from './common/auth/auth.module';
 import { EscrowModule } from './modules/escrow/escrow.module';
 import { SettlementModule } from './modules/settlement/settlement.module';
 import { StreamingModule } from './modules/streaming/streaming.module';
@@ -29,6 +30,7 @@ import { HealthModule } from './modules/health/health.module';
       useFactory: throttlerConfigFactory,
     }),
     BlockchainModule,
+    AuthModule,
     EscrowModule,
     SettlementModule,
     StreamingModule,

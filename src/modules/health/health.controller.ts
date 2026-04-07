@@ -1,9 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('health')
 @SkipThrottle()
+@Public()
 @Controller('health')
 export class HealthController {
   @Get()
