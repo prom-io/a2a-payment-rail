@@ -3,6 +3,7 @@ import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { SanitizePipe } from './common/pipes/sanitize.pipe';
 
@@ -27,7 +28,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(new LoggingInterceptor(), new AuditInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const config = new DocumentBuilder()
