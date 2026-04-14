@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
+import { RefreshTokenService } from './refresh-token.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { RolesGuard } from './roles.guard';
       }),
     }),
   ],
-  providers: [JwtStrategy, JwtAuthGuard, RolesGuard],
-  exports: [JwtModule, JwtAuthGuard, RolesGuard],
+  providers: [JwtStrategy, JwtAuthGuard, RolesGuard, RefreshTokenService],
+  exports: [JwtModule, JwtAuthGuard, RolesGuard, RefreshTokenService],
 })
 export class AuthModule {}
