@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
 import { RefreshTokenService } from './refresh-token.service';
+import { PasswordService } from './password.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { RefreshTokenService } from './refresh-token.service';
       }),
     }),
   ],
-  providers: [JwtStrategy, JwtAuthGuard, RolesGuard, RefreshTokenService],
-  exports: [JwtModule, JwtAuthGuard, RolesGuard, RefreshTokenService],
+  providers: [JwtStrategy, JwtAuthGuard, RolesGuard, RefreshTokenService, PasswordService],
+  exports: [JwtModule, JwtAuthGuard, RolesGuard, RefreshTokenService, PasswordService],
 })
 export class AuthModule {}
