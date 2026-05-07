@@ -1,6 +1,9 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as compression from 'compression';
+import * as bodyParser from 'body-parser';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -11,7 +14,12 @@ import { SanitizePipe } from './common/pipes/sanitize.pipe';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  const bodyLimit = process.env.BODY_LIMIT ?? '100kb';
+  app.use(bodyParser.json({ limit: bodyLimit }));
+  app.use(bodyParser.urlencoded({ limit: bodyLimit, extended: true }));
+  app.use(compression());
 
   app.enableShutdownHooks();
   app.enableCors({
