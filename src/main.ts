@@ -4,6 +4,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { MetricsInterceptor } from './modules/metrics/metrics.interceptor';
+import { MetricsService } from './modules/metrics/metrics.service';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { SanitizePipe } from './common/pipes/sanitize.pipe';
 
@@ -28,7 +30,12 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalInterceptors(new LoggingInterceptor(), new AuditInterceptor());
+  const metricsService = app.get(MetricsService);
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new AuditInterceptor(),
+    new MetricsInterceptor(metricsService),
+  );
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const config = new DocumentBuilder()

@@ -16,6 +16,7 @@ import { StreamingModule } from './modules/streaming/streaming.module';
 import { VerdictsModule } from './modules/verdicts/verdicts.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { HealthModule } from './modules/health/health.module';
     VerdictsModule,
     ReceiptsModule,
     HealthModule,
+    MetricsModule,
   ],
   providers: [
     {
