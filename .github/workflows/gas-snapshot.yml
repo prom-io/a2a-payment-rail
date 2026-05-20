@@ -1,0 +1,55 @@
+name: gas-snapshot
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/gas-snapshot.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Compare gas snapshot
+        id: snapshot
+        run: |
+          forge snapshot --diff .gas-snapshot --tolerance 1 > snapshot.diff || true
+          if [ -s snapshot.diff ]; then
+            echo "diff_present=true" >> $GITHUB_OUTPUT
+            cat snapshot.diff
+          else
+            echo "diff_present=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail on regression
+        if: steps.snapshot.outputs.diff_present == 'true'
+        run: |
+          echo "::error::Gas snapshot regression detected. Run 'forge snapshot' locally and commit the updated .gas-snapshot if the change is intentional."
+          exit 1
+
+      - name: Upload diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-snapshot-diff
+          path: contracts/snapshot.diff
+          if-no-files-found: ignore
