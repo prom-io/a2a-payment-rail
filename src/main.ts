@@ -11,9 +11,11 @@ import { MetricsInterceptor } from './modules/metrics/metrics.interceptor';
 import { MetricsService } from './modules/metrics/metrics.service';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { SanitizePipe } from './common/pipes/sanitize.pipe';
+import { startTracing, stopTracing } from './observability/tracing';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+  await startTracing(logger);
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const bodyLimit = process.env.BODY_LIMIT ?? '100kb';
@@ -65,6 +67,12 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3003;
   await app.listen(port);
   logger.log(`Payment Rail listening on port ${port}`);
+  process.once('SIGINT', () => {
+    void stopTracing(logger);
+  });
+  process.once('SIGTERM', () => {
+    void stopTracing(logger);
+  });
 }
 
 bootstrap();
