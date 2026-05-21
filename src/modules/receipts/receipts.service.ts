@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PaymentReceipt } from './entities/payment-receipt.entity';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ValidateReceiptDto } from './dto/validate-receipt.dto';
@@ -30,6 +30,19 @@ export class ReceiptsService {
       where: { escrowId },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  async findByEscrowIds(escrowIds: string[]): Promise<Record<string, PaymentReceipt[]>> {
+    if (escrowIds.length === 0) return {};
+    const rows = await this.receiptRepo.find({
+      where: { escrowId: In(escrowIds) },
+      order: { createdAt: 'ASC' },
+    });
+    return rows.reduce<Record<string, PaymentReceipt[]>>((acc, row) => {
+      if (!acc[row.escrowId]) acc[row.escrowId] = [];
+      acc[row.escrowId].push(row);
+      return acc;
+    }, {});
   }
 
   async validate(

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ethers } from 'ethers';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { SettleBatchDto } from './dto/settle-batch.dto';
@@ -63,5 +63,19 @@ export class SettlementService {
 
   async findByEscrowId(escrowId: string): Promise<Settlement[]> {
     return this.settlementRepo.find({ where: { escrowId } });
+  }
+
+  async findLatestByEscrowIds(escrowIds: string[]): Promise<Record<string, Settlement>> {
+    if (escrowIds.length === 0) return {};
+    const settlements = await this.settlementRepo.find({
+      where: { escrowId: In(escrowIds) },
+      order: { settledAt: 'DESC', createdAt: 'DESC' },
+    });
+    return settlements.reduce<Record<string, Settlement>>((acc, item) => {
+      if (!acc[item.escrowId]) {
+        acc[item.escrowId] = item;
+      }
+      return acc;
+    }, {});
   }
 }
