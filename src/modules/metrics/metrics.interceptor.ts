@@ -23,6 +23,15 @@ export class MetricsInterceptor implements NestInterceptor {
   private record(context: ExecutionContext, req: Request, start: number): void {
     const res = context.switchToHttp().getResponse<Response>();
     const route = (req.route?.path as string | undefined) ?? req.path ?? 'unknown';
-    this.metricsService.observe(req.method, route, res.statusCode, Date.now() - start);
+    const controller = context.getClass().name;
+    const handler = context.getHandler().name;
+    this.metricsService.observe(
+      req.method,
+      route,
+      controller,
+      handler,
+      res.statusCode,
+      Date.now() - start,
+    );
   }
 }
