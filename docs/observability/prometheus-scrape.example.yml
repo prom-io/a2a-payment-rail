@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: payment-rail
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - payment-rail:3003
+        labels:
+          service: payment-rail
+          environment: dev
