@@ -13,6 +13,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  SCAN_TAG: payment-rail:scan
 
 jobs:
   build-and-push:
@@ -21,6 +22,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -48,7 +50,50 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push
+      # Build once into the local daemon and scan that exact image. Scanning
+      # after the push would mean a vulnerable image is already pullable by the
+      # time anyone finds out.
+      - name: Build for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: ${{ env.SCAN_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.SCAN_TAG }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload scan results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+
+      # Second pass fails the job. Split from the SARIF run so the findings are
+      # always uploaded, including on the run that blocks the push.
+      - name: Fail on critical findings
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.SCAN_TAG }}
+          format: table
+          severity: 'CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -58,5 +103,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           provenance: false
