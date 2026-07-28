@@ -1,8 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { scrypt, randomBytes, timingSafeEqual } from 'crypto';
+import { scrypt, randomBytes, timingSafeEqual, ScryptOptions } from 'crypto';
 import { promisify } from 'util';
 
-const scryptAsync = promisify(scrypt);
+// promisify() resolves to scrypt's three-argument overload, which drops the
+// cost parameters silently. Pin the options-aware signature instead.
+const scryptAsync = promisify(scrypt) as (
+  password: string,
+  salt: string,
+  keylen: number,
+  options: ScryptOptions,
+) => Promise<Buffer>;
 
 const SCRYPT_KEYLEN = 64;
 const SCRYPT_COST = 16384;
