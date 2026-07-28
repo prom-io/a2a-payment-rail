@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install
         run: npm ci --ignore-scripts
@@ -40,6 +41,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install
         run: npm ci --ignore-scripts
@@ -59,6 +61,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install
         run: npm ci --ignore-scripts
@@ -100,6 +103,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install
         run: npm ci --ignore-scripts
@@ -128,6 +132,18 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
+      # Keyed on the sources themselves, not on a lockfile: forge rebuilds
+      # everything when any .sol changes, so a coarser key would never hit.
+      - name: Cache forge artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            contracts/out
+            contracts/cache
+          key: forge-${{ runner.os }}-${{ hashFiles('contracts/src/**/*.sol', 'contracts/script/**/*.sol', 'contracts/test/**/*.sol', 'contracts/foundry.toml') }}
+          restore-keys: |
+            forge-${{ runner.os }}-
 
       - name: Build
         run: forge build --sizes
