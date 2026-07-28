@@ -1,0 +1,78 @@
+groups:
+  - name: payment-rail-availability
+    interval: 30s
+    rules:
+      - alert: PaymentRailDown
+        expr: up{job="payment-rail"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment rail is not being scraped"
+          description: "No successful scrape for 2 minutes. Check the container and the /metrics endpoint."
+
+      - alert: SettlementFailureRateHigh
+        expr: |
+          sum(rate(http_requests_total{controller="SettlementController",status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(http_requests_total{controller="SettlementController"}[5m])), 0.001)
+            > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Over 5% of settlement requests are failing"
+          description: >-
+            Settlement 5xx rate has been above 5% for 10 minutes. Money movement
+            is affected. Check the chain RPC first, then the settlement retry queue.
+
+      - alert: SettlementLatencyDegraded
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket{controller="SettlementController"}[5m])) by (le)
+          ) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Settlement p95 latency above 2s"
+          description: "Usually an RPC slowdown or a batch window that grew too large."
+
+  - name: payment-rail-escrow
+    interval: 60s
+    rules:
+      - alert: EscrowDriftDetected
+        expr: |
+          increase(payment_rail_escrow_sessions{status="disputed"}[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5 escrows entered dispute in the last hour"
+          description: >-
+            A jump in disputes usually means verdicts are not being released, not
+            that counterparties suddenly disagree. Check the verification network.
+
+      - alert: EscrowStuckSettling
+        expr: payment_rail_escrow_sessions{status="settling"} > 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Escrow sessions stuck in settling for 30 minutes"
+          description: >-
+            Settling is meant to be a transient state. A session that stays there
+            means a broadcast transaction never confirmed. Funds are locked.
+
+      - alert: EscrowDepositTotalDropped
+        expr: |
+          delta(payment_rail_escrow_deposit_total[10m]) < -0.2 * payment_rail_escrow_deposit_total offset 10m
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Held escrow value dropped more than 20% in 10 minutes"
+          description: >-
+            Expected during a large batch settlement, alarming otherwise. Cross-check
+            against settlement throughput before escalating.
