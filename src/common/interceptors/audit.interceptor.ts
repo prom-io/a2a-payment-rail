@@ -33,6 +33,9 @@ export class AuditInterceptor implements NestInterceptor {
 
     const start = Date.now();
 
+    const authenticatedUser = (request as unknown as { user?: { userId?: unknown } })
+      .user;
+
     return next.handle().pipe(
       tap(() => {
         const response = context.switchToHttp().getResponse();
@@ -40,8 +43,8 @@ export class AuditInterceptor implements NestInterceptor {
           timestamp: new Date().toISOString(),
           method: request.method,
           path: request.url,
-          userId: (request as Record<string, unknown>).user
-            ? String(((request as Record<string, unknown>).user as Record<string, unknown>).userId ?? 'anonymous')
+          userId: authenticatedUser
+            ? String(authenticatedUser.userId ?? 'anonymous')
             : null,
           ip: request.ip ?? 'unknown',
           userAgent: request.get('user-agent') ?? 'unknown',
