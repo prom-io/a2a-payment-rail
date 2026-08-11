@@ -112,3 +112,30 @@ jobs:
 
       - name: E2E
         run: npm run test:e2e -- --ci --runInBand
+
+  contracts:
+    name: contract tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test -vvv
+
+      # The testnet profile is what actually ships. Building it here catches
+      # optimizer-only failures that the default profile never sees.
+      - name: Build testnet profile
+        run: forge build --profile testnet
