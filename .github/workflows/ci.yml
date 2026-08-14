@@ -66,8 +66,39 @@ jobs:
       - name: Install
         run: npm ci --ignore-scripts
 
-      - name: Test
-        run: npm test -- --ci --runInBand
+      - name: Test with coverage
+        run: npm run test:cov -- --ci --runInBand --coverageReporters=text-summary --coverageReporters=json-summary
+
+      # The thresholds in package.json are a ratchet, not a target: they sit just
+      # under the current numbers so coverage can only go up. Raise them when a
+      # suite lands, never lower them to make a red build green.
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "no coverage summary produced" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Coverage"
+            echo ""
+            echo "| Metric | Covered | Total | % |"
+            echo "| --- | --- | --- | --- |"
+            node -e '
+              const s = require("./coverage/coverage-summary.json").total;
+              for (const k of ["statements", "branches", "functions", "lines"]) {
+                console.log(`| ${k} | ${s[k].covered} | ${s[k].total} | ${s[k].pct}% |`);
+              }
+            '
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
 
   e2e:
     name: e2e tests
