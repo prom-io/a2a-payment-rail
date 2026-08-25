@@ -1,0 +1,15 @@
+services:
+  payment-rail:
+    image: ghcr.io/prom-io/a2a-payment-rail:${IMAGE_TAG:?set IMAGE_TAG}
+    restart: unless-stopped
+    env_file: [.env.staging]
+    ports: ["3003:3003"]
+    depends_on: [postgres]
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_DB: payment_rail
+      POSTGRES_USER: prom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+volumes: { pgdata: {} }
