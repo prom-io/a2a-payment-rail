@@ -1,0 +1,17 @@
+name: staging-deploy
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging host
+        run: |
+          echo "IMAGE_TAG=sha-${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "would ssh to staging and docker compose -f docker-compose.staging.yml up -d"
