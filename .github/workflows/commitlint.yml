@@ -8,4 +8,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - run: npx --yes @commitlint/cli@19 --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --config .commitlintrc.json
+      # Ставим и конфиг тоже: .commitlintrc.json ссылается на config-conventional,
+      # а один только CLI его не притащит, и проверка падала на каждом PR с
+      # «Cannot find module "@commitlint/config-conventional"».
+      - run: npx --yes -p @commitlint/cli@19 -p @commitlint/config-conventional@19 commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --config .commitlintrc.json
