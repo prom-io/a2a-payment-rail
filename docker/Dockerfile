@@ -40,6 +40,12 @@ COPY --from=deps    --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist         ./dist
 COPY --from=builder --chown=node:node /app/package.json ./
 
+# npm и corepack в рантайме не нужны: приложение стартует напрямую через node.
+# Вместе с ними уходит и уязвимый node-tar, который npm тащит внутри базового
+# образа (CVE-2026-59873): именно он валил проверку Trivy, хотя в зависимостях
+# приложения его нет.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER node
 
 EXPOSE 3003
