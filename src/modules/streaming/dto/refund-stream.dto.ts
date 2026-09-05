@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsUUID, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsUUID, IsOptional, MaxLength } from 'class-validator';
 
 export class RefundStreamDto {
   @ApiProperty({ description: 'Escrow session UUID' })

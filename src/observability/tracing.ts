@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-var-requires -- зависимости OpenTelemetry
+   подгружаются лениво: без них сервис должен стартовать, поэтому обычный import
+   здесь неприменим. */
 import { Logger } from '@nestjs/common';
 
 let sdkRef: { shutdown: () => Promise<void> } | null = null;

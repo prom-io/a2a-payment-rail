@@ -28,38 +28,39 @@ export class BusinessMetricsService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    const self = this;
-
-    new Gauge({
+    // Счётчик держим в переменной и пишем в него из стрелочной функции: так
+    // сервис доступен через this, а сам Gauge по имени. Алиас this на локальную
+    // переменную здесь не нужен.
+    const escrowSessions = new Gauge({
       name: 'payment_rail_escrow_sessions',
       help: 'Escrow sessions by status',
       labelNames: ['chain', 'status'] as const,
       registers: [this.metrics.registry],
-      async collect() {
-        const counts = await self.countEscrowsByStatus();
+      collect: async () => {
+        const counts = await this.countEscrowsByStatus();
         for (const status of Object.values(EscrowStatus)) {
-          this.set({ chain: self.chain, status }, counts[status] ?? 0);
+          escrowSessions.set({ chain: this.chain, status }, counts[status] ?? 0);
         }
       },
     });
 
-    new Gauge({
+    const escrowDeposits = new Gauge({
       name: 'payment_rail_escrow_deposit_total',
       help: 'Sum of deposits held in open escrow sessions',
       labelNames: ['chain'] as const,
       registers: [this.metrics.registry],
-      async collect() {
-        this.set({ chain: self.chain }, await self.sumOpenDeposits());
+      collect: async () => {
+        escrowDeposits.set({ chain: this.chain }, await this.sumOpenDeposits());
       },
     });
 
-    new Gauge({
+    const activeStreamClaims = new Gauge({
       name: 'payment_rail_stream_claims_active',
       help: 'Stream claims belonging to escrow sessions that are still open',
       labelNames: ['chain'] as const,
       registers: [this.metrics.registry],
-      async collect() {
-        this.set({ chain: self.chain }, await self.countActiveStreamClaims());
+      collect: async () => {
+        activeStreamClaims.set({ chain: this.chain }, await this.countActiveStreamClaims());
       },
     });
   }
