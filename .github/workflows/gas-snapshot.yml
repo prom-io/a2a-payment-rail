@@ -29,22 +29,18 @@ jobs:
       - name: Build
         run: forge build --sizes
 
+      # --check exits non-zero only when gas really moved past the tolerance.
+      # The previous version used --diff, which prints a line for every test even
+      # when nothing changed, and then treated a non-empty file as a regression,
+      # so this job could never pass.
       - name: Compare gas snapshot
-        id: snapshot
         run: |
-          forge snapshot --diff .gas-snapshot --tolerance 1 > snapshot.diff || true
-          if [ -s snapshot.diff ]; then
-            echo "diff_present=true" >> $GITHUB_OUTPUT
-            cat snapshot.diff
-          else
-            echo "diff_present=false" >> $GITHUB_OUTPUT
-          fi
+          set -o pipefail
+          forge snapshot --check .gas-snapshot --tolerance 1 | tee snapshot.diff
 
-      - name: Fail on regression
-        if: steps.snapshot.outputs.diff_present == 'true'
-        run: |
-          echo "::error::Gas snapshot regression detected. Run 'forge snapshot' locally and commit the updated .gas-snapshot if the change is intentional."
-          exit 1
+      - name: Explain the failure
+        if: failure()
+        run: echo "::error::Gas usage moved beyond the tolerance. Run 'forge snapshot' locally and commit the updated .gas-snapshot if the change is intentional."
 
       - name: Upload diff
         if: always()
