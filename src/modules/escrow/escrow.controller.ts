@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { EscrowService } from './escrow.service';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
@@ -26,6 +26,7 @@ export class EscrowController {
   }
 
   @Post(':id/close')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Close an escrow session' })
   @ApiResponse({ status: 200, description: 'Escrow closed and funds settled' })
   @ApiResponse({ status: 404, description: 'Escrow session not found' })
@@ -35,6 +36,7 @@ export class EscrowController {
   }
 
   @Post(':id/emergency-close')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Emergency close an escrow session' })
   @ApiResponse({ status: 200, description: 'Emergency close executed' })
   @ApiResponse({ status: 404, description: 'Escrow session not found' })
