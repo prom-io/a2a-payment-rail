@@ -2,13 +2,17 @@ name: commitlint
 on: [pull_request]
 jobs:
   lint:
+    name: commit messages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      # Ставим и конфиг тоже: .commitlintrc.json ссылается на config-conventional,
-      # а один только CLI его не притащит, и проверка падала на каждом PR с
-      # «Cannot find module "@commitlint/config-conventional"».
-      - run: npx --yes -p @commitlint/cli@19 -p @commitlint/config-conventional@19 commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --config .commitlintrc.json
+        with: { node-version: 20, cache: npm }
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      # commitlint ищет расширяемый конфиг относительно каталога репозитория, а не
+      # временной папки npx, поэтому он стоит в devDependencies. Раньше шаг тянул
+      # только CLI через npx и падал с «Cannot find module».
+      - run: npx commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --config .commitlintrc.json
