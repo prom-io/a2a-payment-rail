@@ -17,7 +17,10 @@ describe('Security (e2e)', () => {
       new SanitizePipe(),
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
-    await app.init();
+    // listen(0) поднимает сервер один раз на случайном порту. С одним лишь init()
+    // сервер не слушает, и 20 параллельных запросов теста на лимиты поднимали его
+    // наперегонки, что давало ECONNRESET.
+    await app.listen(0);
   });
 
   afterAll(async () => {
