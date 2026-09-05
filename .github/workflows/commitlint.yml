@@ -4,6 +4,10 @@ jobs:
   lint:
     name: commit messages
     runs-on: ubuntu-latest
+    # Правило про длину строк в теле коммита писалось для людей. Dependabot
+    # вставляет в тело ссылки на changelog длиннее ста символов, и проверка
+    # блокировала обновления зависимостей из-за оформления текста, а не сути.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
