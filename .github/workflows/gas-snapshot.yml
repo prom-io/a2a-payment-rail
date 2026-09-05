@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - 'contracts/**'
+      # правку самой проверки тоже надо прогонять, иначе её починку не увидеть
+      - '.github/workflows/gas-snapshot.yml'
 
 jobs:
   diff:
