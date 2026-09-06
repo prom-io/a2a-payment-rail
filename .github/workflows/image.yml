@@ -75,8 +75,13 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'
 
+      # Выгрузка отчёта в раздел безопасности требует GitHub Advanced Security,
+      # которого на приватном зеркале нет: шаг отвечал «Resource not accessible»
+      # и валил всю сборку образа. Сам гейт по уязвимостям ниже никуда не делся,
+      # необязательной стала только публикация отчёта.
       - name: Upload scan results
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
