@@ -32,6 +32,10 @@ export class Settlement {
   })
   status!: SettlementStatus;
 
+  // Number of receipts aggregated into this batch; null for hand-submitted batches.
+  @Column({ type: 'int', nullable: true })
+  receiptCount!: number | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

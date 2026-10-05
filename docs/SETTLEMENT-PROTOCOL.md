@@ -90,6 +90,28 @@ streaming module exposes `POST /streaming/refund` which:
 5. Returns the refund record. The actual on-chain refund is then triggered by
    the batcher as a regular `closeEscrow` call.
 
+## 6a. Batch scheduler
+
+`SettlementBatchScheduler` (`src/modules/settlement/settlement-batch.scheduler.ts`)
+turns accumulated receipts into settlements without a caller asking for it. It
+is opt-in (`SETTLEMENT_BATCH_ENABLED=true`).
+
+Every `SETTLEMENT_BATCH_TICK_MS` it loads the oldest unsettled receipts
+(`payment_receipts.settlementId IS NULL`), groups them by escrow and flushes an
+escrow when either bound is hit:
+
+| bound  | variable                        | default | effect                                            |
+|--------|---------------------------------|--------:|---------------------------------------------------|
+| window | `SETTLEMENT_BATCH_WINDOW_MS`    |   60000 | oldest receipt waited this long: flush everything |
+| cap    | `SETTLEMENT_BATCH_MAX_RECEIPTS` |     100 | a full batch is flushed early, the rest waits     |
+
+A batch never holds more than the cap; a backlog is split into several
+settlements. The batch hash is the Merkle root of the receipt hashes in
+creation order and the total is summed in wei with `bigint`. Receipts are
+attached to the settlement through `settlementId` only after the settlement
+was accepted; a batch rejected on-chain leaves its receipts unattached so the
+next window retries them. Ticks never overlap inside one process.
+
 ## 7. Gas budget
 
 Targets enforced by the `forge snapshot --diff` CI gate (`.gas-snapshot`):

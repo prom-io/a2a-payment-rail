@@ -8,6 +8,7 @@ import { databaseConfigFactory } from './config/database.config';
 import { throttlerConfigFactory } from './config/throttler.config';
 import blockchainConfig from './config/blockchain.config';
 import securityConfig from './config/security.config';
+import settlementConfig from './config/settlement.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
 import { EscrowModule } from './modules/escrow/escrow.module';
@@ -22,7 +23,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [blockchainConfig, securityConfig],
+      load: [blockchainConfig, securityConfig, settlementConfig],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],

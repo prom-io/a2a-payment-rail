@@ -84,7 +84,7 @@ export function unpackReceipts(blob: string): PackableReceipt[] {
   return out;
 }
 
-function buildMerkleRoot(leaves: string[]): string {
+export function buildMerkleRoot(leaves: string[]): string {
   if (leaves.length === 0) return ethers.ZeroHash;
   let layer = leaves.map((l) => l.toLowerCase());
   while (layer.length > 1) {

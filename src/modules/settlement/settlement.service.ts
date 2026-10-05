@@ -8,6 +8,14 @@ import { SettleBatchDto } from './dto/settle-batch.dto';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 
+/** Batch parameters; the amount is a decimal string when it comes from the scheduler. */
+export interface SettleBatchInput {
+  escrowId: string;
+  receiptsHash: string;
+  totalAmount: number | string;
+  receiptCount?: number;
+}
+
 @Injectable()
 export class SettlementService {
   private readonly logger = new Logger(SettlementService.name);
@@ -22,12 +30,13 @@ export class SettlementService {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
   }
 
-  async settleBatch(dto: SettleBatchDto): Promise<Settlement & { txHash?: string }> {
+  async settleBatch(dto: SettleBatchDto | SettleBatchInput): Promise<Settlement & { txHash?: string }> {
     const settlement = this.settlementRepo.create({
       escrowId: dto.escrowId,
       receiptsHash: dto.receiptsHash,
       totalAmount: dto.totalAmount.toString(),
       status: SettlementStatus.PENDING,
+      receiptCount: 'receiptCount' in dto ? (dto.receiptCount ?? null) : null,
     });
     const saved = await this.settlementRepo.save(settlement);
 

@@ -31,6 +31,10 @@ export class PaymentReceipt {
   @Column()
   signature!: string;
 
+  // Settlement this receipt was batched into; null while it waits for a batch.
+  @Column({ type: 'uuid', nullable: true })
+  settlementId!: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

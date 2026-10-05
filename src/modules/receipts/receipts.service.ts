@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { PaymentReceipt } from './entities/payment-receipt.entity';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ValidateReceiptDto } from './dto/validate-receipt.dto';
@@ -43,6 +43,20 @@ export class ReceiptsService {
       acc[row.escrowId].push(row);
       return acc;
     }, {});
+  }
+
+  /** Oldest receipts that are not part of any settlement batch yet. */
+  async findUnsettled(limit: number): Promise<PaymentReceipt[]> {
+    return this.receiptRepo.find({
+      where: { settlementId: IsNull() },
+      order: { createdAt: 'ASC', id: 'ASC' },
+      take: limit,
+    });
+  }
+
+  async markSettled(receiptIds: string[], settlementId: string): Promise<void> {
+    if (receiptIds.length === 0) return;
+    await this.receiptRepo.update({ id: In(receiptIds) }, { settlementId });
   }
 
   async validate(
