@@ -14,6 +14,8 @@ export interface SettleBatchInput {
   receiptsHash: string;
   totalAmount: number | string;
   receiptCount?: number;
+  /** Compact calldata blob of the batch, see batch-calldata.util.ts. */
+  packedReceipts?: string;
 }
 
 @Injectable()
@@ -37,6 +39,7 @@ export class SettlementService {
       totalAmount: dto.totalAmount.toString(),
       status: SettlementStatus.PENDING,
       receiptCount: 'receiptCount' in dto ? (dto.receiptCount ?? null) : null,
+      packedReceipts: 'packedReceipts' in dto ? (dto.packedReceipts ?? null) : null,
     });
     const saved = await this.settlementRepo.save(settlement);
 

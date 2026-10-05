@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { unpackReceiptsCompact } from './batch-calldata.util';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
 import { SettlementStatus } from './entities/settlement.entity';
@@ -77,6 +78,11 @@ describe('SettlementBatchScheduler', () => {
     expect(settlements.settleBatch).toHaveBeenCalledWith(
       expect.objectContaining({ escrowId: ESCROW_A, totalAmount: '0.75', receiptCount: 2 }),
     );
+    const [input] = settlements.settleBatch.mock.calls[0];
+    expect(unpackReceiptsCompact(input.packedReceipts).map((r) => r.amountMinor)).toEqual([
+      5n * 10n ** 17n,
+      25n * 10n ** 16n,
+    ]);
     expect(receipts.markSettled).toHaveBeenCalledWith(
       pending.map((r) => r.id),
       'settlement-1',

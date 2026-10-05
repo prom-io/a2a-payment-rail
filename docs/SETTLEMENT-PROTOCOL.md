@@ -51,6 +51,33 @@ To minimise calldata gas, receipts are packed by the batcher using
 A Merkle root over the receipt hashes is supplied separately so the contract
 can verify membership in O(log N) without rehashing the entire payload.
 
+### 3.1 Compact layout (v2)
+
+The 80-byte layout repeats the payer and the payee on every receipt and spends
+eight bytes on amounts that are almost always round numbers. The batch
+scheduler therefore encodes batches with `batch-calldata.util.ts`:
+
+| part        | size          | notes                                              |
+|-------------|---------------|----------------------------------------------------|
+| version     | 1             | `0x02`                                             |
+| addresses   | 1 + 20 * A    | dictionary, order of first appearance              |
+| count       | 2             | uint16 number of receipts                          |
+| receiptHash | 32            | per receipt                                        |
+| payer/payee | 1 + 1         | per receipt, indexes into the dictionary           |
+| amount      | 1 + 1 + L     | per receipt: decimal exponent, length, mantissa    |
+
+`amount = mantissa * 10^exponent`, so `1.5` ether (`1500000000000000000` wei)
+is the mantissa `15` and the exponent `17`: one byte instead of eight, and the
+amount is no longer limited to uint64. A typical receipt takes 37 bytes instead
+of 80; for a 100-receipt batch the EIP-2028 calldata gas (`calldataGas()`) drops
+by more than half. The Merkle root is the same as in v1.
+
+The blob is stored with the settlement (`settlements.packedReceipts`).
+`EscrowHub.settleBatch` as deployed takes only the root and the total, so the
+blob is not sent on-chain yet: it is the payload format for a hub version that
+accepts receipt data, and until then it is what an auditor re-derives the root
+from.
+
 ## 4. Access list (EIP-2930)
 
 The batcher precomputes the storage slots touched by `settleBatch`:

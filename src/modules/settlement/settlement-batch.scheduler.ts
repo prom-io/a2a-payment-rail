@@ -4,7 +4,7 @@ import { ethers } from 'ethers';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
 import { SettlementStatus } from './entities/settlement.entity';
-import { buildMerkleRoot } from './receipt-packing.util';
+import { calldataGas, packReceiptsCompact } from './batch-calldata.util';
 import { SettlementService } from './settlement.service';
 
 export interface BatchRunResult {
@@ -117,15 +117,22 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
   }
 
   private async settleChunk(escrowId: string, chunk: PaymentReceipt[]): Promise<void> {
-    const total = chunk.reduce(
-      (sum, receipt) => sum + ethers.parseUnits(receipt.amount, AMOUNT_DECIMALS),
-      0n,
+    const amounts = chunk.map((receipt) => ethers.parseUnits(receipt.amount, AMOUNT_DECIMALS));
+    const total = amounts.reduce((sum, amount) => sum + amount, 0n);
+    const packed = packReceiptsCompact(
+      chunk.map((receipt, i) => ({
+        receiptHash: receipt.receiptHash,
+        payer: receipt.fromAgent,
+        payee: receipt.toAgent,
+        amountMinor: amounts[i],
+      })),
     );
     const settlement = await this.settlementService.settleBatch({
       escrowId,
-      receiptsHash: buildMerkleRoot(chunk.map((receipt) => receipt.receiptHash)),
+      receiptsHash: packed.root,
       totalAmount: ethers.formatUnits(total, AMOUNT_DECIMALS),
       receiptCount: chunk.length,
+      packedReceipts: packed.blob,
     });
 
     if (settlement.status === SettlementStatus.REJECTED) {
@@ -137,7 +144,8 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
       settlement.id,
     );
     this.logger.log(
-      `Batched ${chunk.length} receipts of escrow ${escrowId} into settlement ${settlement.id}`,
+      `Batched ${chunk.length} receipts of escrow ${escrowId} into settlement ${settlement.id} ` +
+        `(${packed.bytes} calldata bytes, ${calldataGas(packed.blob)} gas)`,
     );
   }
 }
