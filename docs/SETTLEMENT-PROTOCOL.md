@@ -135,9 +135,40 @@ escrow when either bound is hit:
 A batch never holds more than the cap; a backlog is split into several
 settlements. The batch hash is the Merkle root of the receipt hashes in
 creation order and the total is summed in wei with `bigint`. Receipts are
-attached to the settlement through `settlementId` only after the settlement
-was accepted; a batch rejected on-chain leaves its receipts unattached so the
-next window retries them. Ticks never overlap inside one process.
+attached to the settlement through `settlementId` whatever the on-chain
+outcome: a failed settlement is completed by the retry queue (6b), never by
+batching the same receipts a second time. Ticks never overlap inside one
+process.
+
+## 6b. Retry queue and dead letter
+
+Every on-chain submission goes through `SettlementService.attempt()`, which
+records the outcome on the settlement row:
+
+| outcome                               | status        | next step                              |
+|---------------------------------------|---------------|----------------------------------------|
+| mined                                 | `settled`     | none                                   |
+| contract revert (`CALL_EXCEPTION`)    | `rejected`    | manual replay only                     |
+| transient error (RPC, timeout, nonce) | `retrying`    | retried at `nextRetryAt`               |
+| transient error, attempts used up     | `dead_letter` | manual replay only                     |
+
+`SettlementRetryService` polls the queue (`status = retrying AND nextRetryAt <=
+now`) every `SETTLEMENT_RETRY_TICK_MS` and retries one settlement at a time,
+because all attempts share one signer nonce. The delay doubles per attempt from
+`SETTLEMENT_RETRY_BASE_DELAY_MS` (30 s) up to `SETTLEMENT_RETRY_MAX_DELAY_MS`
+(1 h); after `SETTLEMENT_RETRY_MAX_ATTEMPTS` (5) the row is dead-lettered.
+
+The contract does not deduplicate batches, so a retry must not double-pay. The
+transaction hash is stored (`settlements.txHash`) before waiting for the
+receipt; a retry first looks that hash up: mined means settled, still pending
+means wait without resending, unknown or reverted means send again.
+
+Operator endpoints:
+
+- `GET /settlements/dead-letter` lists `dead_letter` and `rejected` rows with
+  `attempts` and `lastError`.
+- `POST /settlements/:id/replay` (role `admin`) resets the attempts and submits
+  again at once; `409` for any other status.
 
 ## 7. Gas budget
 

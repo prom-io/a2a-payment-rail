@@ -81,7 +81,8 @@
       "!**/entities/**",
       "!**/abis/**",
       "!**/dto/**",
-      "!**/*.spec.ts"
+      "!**/*.spec.ts",
+      "!**/testing/**"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

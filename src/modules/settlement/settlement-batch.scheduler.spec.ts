@@ -1,4 +1,4 @@
-import { ConfigService } from '@nestjs/config';
+import { configStub } from '../../testing/stubs';
 import { unpackReceiptsCompact } from './batch-calldata.util';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
@@ -12,7 +12,7 @@ const ESCROW_B = '22222222-2222-4222-8222-222222222222';
 
 let sequence = 0;
 
-export function receipt(escrowId: string, ageMs: number, amount = '1'): PaymentReceipt {
+function receipt(escrowId: string, ageMs: number, amount = '1'): PaymentReceipt {
   sequence += 1;
   return {
     id: `receipt-${sequence}`,
@@ -26,12 +26,6 @@ export function receipt(escrowId: string, ageMs: number, amount = '1'): PaymentR
     settlementId: null,
     createdAt: new Date(NOW.getTime() - ageMs),
   } as PaymentReceipt;
-}
-
-export function configStub(values: Record<string, unknown>): ConfigService {
-  return {
-    get: (key: string, fallback?: unknown) => (key in values ? values[key] : fallback),
-  } as unknown as ConfigService;
 }
 
 function build(pending: PaymentReceipt[], config: Record<string, unknown> = {}) {
@@ -113,14 +107,15 @@ describe('SettlementBatchScheduler', () => {
     expect(escrows).toEqual([ESCROW_A, ESCROW_B]);
   });
 
-  it('does not attach receipts to a batch rejected on-chain', async () => {
-    const { scheduler, receipts, settlements } = build([receipt(ESCROW_A, 90_000)]);
-    settlements.settleBatch.mockResolvedValue({ id: 's', status: SettlementStatus.REJECTED });
+  it('keeps receipts attached to a failed batch so the retry queue owns it', async () => {
+    const pending = [receipt(ESCROW_A, 90_000)];
+    const { scheduler, receipts, settlements } = build(pending);
+    settlements.settleBatch.mockResolvedValue({ id: 's', status: SettlementStatus.RETRYING });
 
     const result = await scheduler.runOnce(NOW);
 
-    expect(result).toMatchObject({ batches: 0, failed: 1 });
-    expect(receipts.markSettled).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ batches: 1, failed: 0 });
+    expect(receipts.markSettled).toHaveBeenCalledWith([pending[0].id], 's');
   });
 
   it('does not start a timer unless the scheduler is enabled', () => {

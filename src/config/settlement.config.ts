@@ -23,4 +23,14 @@ export default registerAs('settlement', () => ({
     // Unsettled receipts examined per tick, across all escrows.
     scanLimit: intFromEnv(process.env.SETTLEMENT_BATCH_SCAN_LIMIT, 1_000, 1),
   },
+  retry: {
+    enabled: process.env.SETTLEMENT_RETRY_ENABLED !== 'false',
+    // Attempts per settlement, the first submission included, before dead letter.
+    maxAttempts: intFromEnv(process.env.SETTLEMENT_RETRY_MAX_ATTEMPTS, 5, 1),
+    // Backoff: base, 2x base, 4x base ... capped at the maximum.
+    baseDelayMs: intFromEnv(process.env.SETTLEMENT_RETRY_BASE_DELAY_MS, 30_000, 100),
+    maxDelayMs: intFromEnv(process.env.SETTLEMENT_RETRY_MAX_DELAY_MS, 3_600_000, 100),
+    tickMs: intFromEnv(process.env.SETTLEMENT_RETRY_TICK_MS, 15_000, 250),
+    batchSize: intFromEnv(process.env.SETTLEMENT_RETRY_BATCH_SIZE, 20, 1),
+  },
 }));

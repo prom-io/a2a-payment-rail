@@ -1,5 +1,20 @@
-import { Controller, Post, Get, Param, Body, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Role } from '../../common/auth/roles.enum';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { SettlementService } from './settlement.service';
 import { SettleBatchDto } from './dto/settle-batch.dto';
 
@@ -14,6 +29,28 @@ export class SettlementController {
   @ApiResponse({ status: 400, description: 'Invalid settlement parameters' })
   settleBatch(@Body() dto: SettleBatchDto) {
     return this.settlementService.settleBatch(dto);
+  }
+
+  // Declared before ':id' so the literal segment is not taken for an id.
+  @Get('dead-letter')
+  @ApiOperation({ summary: 'List settlements that need an operator (dead_letter, rejected)' })
+  @ApiResponse({ status: 200, description: 'Dead-lettered and rejected settlements' })
+  findDeadLetters() {
+    return this.settlementService.findDeadLetters();
+  }
+
+  @Post(':id/replay')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Manually replay a dead-lettered or rejected settlement' })
+  @ApiParam({ name: 'id', description: 'Settlement UUID' })
+  @ApiResponse({ status: 200, description: 'Settlement after the replay attempt' })
+  @ApiResponse({ status: 404, description: 'Settlement not found' })
+  @ApiResponse({ status: 409, description: 'Settlement is not in a replayable state' })
+  replay(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.settlementService.replay(id);
   }
 
   @Get(':id')

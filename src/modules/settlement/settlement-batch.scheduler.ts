@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
-import { SettlementStatus } from './entities/settlement.entity';
 import { calldataGas, packReceiptsCompact } from './batch-calldata.util';
 import { SettlementService } from './settlement.service';
 
@@ -27,7 +26,8 @@ const AMOUNT_DECIMALS = 18;
  *             batches only, the remainder keeps waiting for the window).
  *
  * A receipt is attached to its settlement by `settlementId`, which is what
- * keeps it from being picked up by the next tick.
+ * keeps it from being picked up by the next tick. Failed settlements keep their
+ * receipts and are driven to completion by SettlementRetryService.
  */
 @Injectable()
 export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
@@ -135,10 +135,9 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
       packedReceipts: packed.blob,
     });
 
-    if (settlement.status === SettlementStatus.REJECTED) {
-      // Leave the receipts unattached so the next window picks them up again.
-      throw new Error(`settlement ${settlement.id} was rejected on-chain`);
-    }
+    // Attach whatever the on-chain outcome was. A failed settlement is retried
+    // as the same row by the retry queue; re-batching its receipts here would
+    // open a second settlement for the same money.
     await this.receiptsService.markSettled(
       chunk.map((receipt) => receipt.id),
       settlement.id,
