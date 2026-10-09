@@ -170,6 +170,7 @@ The deploy script writes contract addresses to stdout — copy `EscrowHub` addre
 - **Errors** — throw the appropriate Nest exception (`BadRequestException`, `NotFoundException`, ...). The global `AllExceptionsFilter` formats the response.
 - **Public endpoints** — annotate with `@Public()` (from `src/common/decorators/public.decorator.ts`) to bypass JWT auth.
 - **Rate-limit-exempt endpoints** — annotate with `@SkipThrottle()` (typically `/health`, `/ready`, `/metrics`).
+- **Idempotency** — escrow and settlement mutations accept an `Idempotency-Key` header (`IdempotencyInterceptor`, `src/common/idempotency/`). The first response is stored for `IDEMPOTENCY_TTL_SECONDS` (default 24h) and replayed with `Idempotency-Replayed: true`; the same key with a different body is `422`, a key whose first request is still running is `409`, and a failed request releases its key. Add `@UseInterceptors(IdempotencyInterceptor)` to any new mutation that moves money.
 - **Mutations** — auto-audited by `AuditInterceptor` (POST/PUT/PATCH/DELETE). One log line per request.
 
 ## 10. Common tasks

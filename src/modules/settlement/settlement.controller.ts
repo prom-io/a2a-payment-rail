@@ -9,8 +9,18 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+  ApiHeader,
+} from '@nestjs/swagger';
+import { IdempotencyInterceptor } from '../../common/idempotency/idempotency.interceptor';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Role } from '../../common/auth/roles.enum';
@@ -24,6 +34,12 @@ export class SettlementController {
   constructor(private readonly settlementService: SettlementService) {}
 
   @Post('batch')
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Unique key; a retry with the same key and body replays the first response',
+  })
   @ApiOperation({ summary: 'Submit a batch settlement' })
   @ApiResponse({ status: 201, description: 'Settlement batch submitted to chain' })
   @ApiResponse({ status: 400, description: 'Invalid settlement parameters' })
@@ -41,6 +57,7 @@ export class SettlementController {
 
   @Post(':id/replay')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @ApiBearerAuth()

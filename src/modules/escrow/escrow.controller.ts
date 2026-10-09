@@ -1,5 +1,15 @@
-import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiHeader } from '@nestjs/swagger';
+import { IdempotencyInterceptor } from '../../common/idempotency/idempotency.interceptor';
 import { EscrowService } from './escrow.service';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
 
@@ -9,6 +19,12 @@ export class EscrowController {
   constructor(private readonly escrowService: EscrowService) {}
 
   @Post()
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Unique key; a retry with the same key and body replays the first response',
+  })
   @ApiOperation({ summary: 'Open a new escrow session' })
   @ApiResponse({ status: 201, description: 'Escrow session created' })
   @ApiResponse({ status: 400, description: 'Invalid escrow parameters' })
@@ -27,6 +43,12 @@ export class EscrowController {
 
   @Post(':id/close')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Unique key; a retry with the same key and body replays the first response',
+  })
   @ApiOperation({ summary: 'Close an escrow session' })
   @ApiResponse({ status: 200, description: 'Escrow closed and funds settled' })
   @ApiResponse({ status: 404, description: 'Escrow session not found' })
@@ -37,6 +59,12 @@ export class EscrowController {
 
   @Post(':id/emergency-close')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Unique key; a retry with the same key and body replays the first response',
+  })
   @ApiOperation({ summary: 'Emergency close an escrow session' })
   @ApiResponse({ status: 200, description: 'Emergency close executed' })
   @ApiResponse({ status: 404, description: 'Escrow session not found' })

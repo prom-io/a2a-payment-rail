@@ -11,6 +11,7 @@ import securityConfig from './config/security.config';
 import settlementConfig from './config/settlement.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { EscrowModule } from './modules/escrow/escrow.module';
 import { SettlementModule } from './modules/settlement/settlement.module';
 import { StreamingModule } from './modules/streaming/streaming.module';
@@ -35,6 +36,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     }),
     BlockchainModule,
     AuthModule,
+    IdempotencyModule,
     EscrowModule,
     SettlementModule,
     StreamingModule,
