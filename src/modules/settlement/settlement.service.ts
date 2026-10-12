@@ -7,6 +7,7 @@ import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { FeePolicyService } from '../fees/fee-policy.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
 
 /** Batch parameters; the amount is a decimal string when it comes from the scheduler. */
 export interface SettleBatchInput {
@@ -37,6 +38,7 @@ export class SettlementService {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly feePolicyService: FeePolicyService,
+    private readonly feeLedgerService: FeeLedgerService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
     this.maxAttempts = this.configService.get<number>('settlement.retry.maxAttempts', 5);
@@ -87,6 +89,7 @@ export class SettlementService {
       settlement.settledAt = now;
       settlement.nextRetryAt = null;
       settlement.lastError = null;
+      await this.accrueFee(settlement);
       this.logger.log(
         `Settlement ${settlement.id} for escrow ${settlement.escrowId} completed, tx: ${hash}`,
       );
@@ -172,6 +175,18 @@ export class SettlementService {
       }
       return acc;
     }, {});
+  }
+
+  /** The payout already happened; a ledger hiccup must not turn it into a failure. */
+  private async accrueFee(settlement: Settlement): Promise<void> {
+    try {
+      await this.feeLedgerService.accrue(settlement);
+    } catch (error) {
+      this.logger.error(
+        `Fee of settlement ${settlement.id} (${settlement.feeAmount}) was not accrued: ` +
+          (error as Error).message,
+      );
+    }
   }
 
   /**

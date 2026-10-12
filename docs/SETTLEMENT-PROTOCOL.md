@@ -193,6 +193,28 @@ The contract still withholds its own `feePercent` on-chain. Keep the policy of
 a chain equal to the deployed `feePercent` unless bounds are wanted: with
 equal basis points and no bounds both sides round down to the same wei.
 
+## 6d. Fee ledger
+
+`FeeLedgerService` keeps an append-only ledger (`fee_ledger_entries`):
+
+- an `accrual` row is written when a settlement becomes `settled`, for its
+  `feeAmount` and the chain in `CHAIN_ID`. `settlementId` is unique, so a
+  retried or replayed settlement cannot accrue twice. A failing ledger write is
+  logged and does not undo the settlement;
+- a `withdrawal` row is written by `POST /fees/withdrawals` (role `admin`,
+  accepts `Idempotency-Key`) with `{ amount, recipient, chainId?, txHash?, note? }`.
+
+`available = sum(accruals) - sum(withdrawals)` per chain. A withdrawal above
+the available balance is `409`. Withdrawals of one chain are serialised with a
+transaction-scoped Postgres advisory lock, so two concurrent requests cannot
+both spend the same balance. `GET /fees/ledger?chainId=` returns the balance
+and the 50 most recent entries.
+
+The ledger is the rail's own book. `EscrowHub` leaves withheld fees in the
+contract balance and has no payout function, so a withdrawal does not send a
+transaction: it records the treasury payout (`txHash` when known) and enforces
+that payouts never exceed what was accrued.
+
 ## 7. Gas budget
 
 Targets enforced by the `forge snapshot --diff` CI gate (`.gas-snapshot`):

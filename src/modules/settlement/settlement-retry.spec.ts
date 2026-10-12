@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { FeePolicyService } from '../fees/fee-policy.service';
 import { configStub } from '../../testing/stubs';
 import { SettlementRetryService } from './settlement-retry.service';
@@ -34,6 +35,7 @@ function build(config: Record<string, unknown> = {}) {
     getContract: jest.fn().mockReturnValue({ settleBatch }),
     getProvider: jest.fn().mockReturnValue(provider),
   };
+  const feeLedger = { accrue: jest.fn().mockResolvedValue(null) };
   const config$ = configStub({
     ESCROW_HUB_ADDRESS: '0x' + '1'.repeat(40),
     'settlement.retry.maxAttempts': 3,
@@ -46,9 +48,10 @@ function build(config: Record<string, unknown> = {}) {
     blockchain as unknown as BlockchainService,
     config$,
     new FeePolicyService(config$),
+    feeLedger as unknown as FeeLedgerService,
   );
   const mined = (hash = '0xtx') => ({ hash, wait: jest.fn().mockResolvedValue({ hash }) });
-  return { service, repo, settleBatch, provider, mined, retry: new SettlementRetryService(service, config$) };
+  return { service, repo, settleBatch, provider, mined, feeLedger, retry: new SettlementRetryService(service, config$) };
 }
 
 const input = { escrowId: ESCROW, receiptsHash: HASH, totalAmount: '1.5' };
@@ -67,6 +70,27 @@ describe('settlement retry queue', () => {
       txHash: '0xfirst',
       nextRetryAt: null,
     });
+  });
+
+  it('accrues the fee once the settlement is settled and survives a ledger failure', async () => {
+    const { service, settleBatch, mined, feeLedger } = build();
+    settleBatch.mockResolvedValue(mined());
+    feeLedger.accrue.mockRejectedValueOnce(new Error('ledger down'));
+
+    const first = await service.settleBatch(input);
+    const second = await service.settleBatch(input);
+
+    expect(first.status).toBe(SettlementStatus.SETTLED);
+    expect(feeLedger.accrue).toHaveBeenLastCalledWith(expect.objectContaining({ id: second.id, feeAmount: '0.0075' }));
+  });
+
+  it('does not accrue a fee for a settlement that failed', async () => {
+    const { service, settleBatch, feeLedger } = build();
+    settleBatch.mockRejectedValue(chainError('CALL_EXCEPTION'));
+
+    await service.settleBatch(input);
+
+    expect(feeLedger.accrue).not.toHaveBeenCalled();
   });
 
   it('queues a transient failure with exponential backoff capped at the maximum', async () => {
