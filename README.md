@@ -63,6 +63,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 | Streaming | `/streaming` | Streaming micro-payment claims |
 | Verdicts | `/verdicts` | Verdict status and fund release |
 | Receipts | `/receipts` | Payment receipt creation and validation |
+| Fees | `/fees` | Fee policies per chain and fee quotes |
 | Health | `/health` | Service health check |
 
 ## Docker

@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
+import { FeePolicyService } from '../fees/fee-policy.service';
 import { configStub } from '../../testing/stubs';
 import { SettlementRetryService } from './settlement-retry.service';
 import { SettlementService } from './settlement.service';
@@ -44,6 +45,7 @@ function build(config: Record<string, unknown> = {}) {
     repo as unknown as Repository<Settlement>,
     blockchain as unknown as BlockchainService,
     config$,
+    new FeePolicyService(config$),
   );
   const mined = (hash = '0xtx') => ({ hash, wait: jest.fn().mockResolvedValue({ hash }) });
   return { service, repo, settleBatch, provider, mined, retry: new SettlementRetryService(service, config$) };
@@ -59,6 +61,7 @@ describe('settlement retry queue', () => {
     const settlement = await service.settleBatch(input);
 
     expect(settlement).toMatchObject({
+      feeAmount: '0.0075',
       status: SettlementStatus.SETTLED,
       attempts: 1,
       txHash: '0xfirst',

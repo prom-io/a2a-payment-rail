@@ -9,6 +9,7 @@ import { throttlerConfigFactory } from './config/throttler.config';
 import blockchainConfig from './config/blockchain.config';
 import securityConfig from './config/security.config';
 import settlementConfig from './config/settlement.config';
+import feesConfig from './config/fees.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
@@ -19,12 +20,13 @@ import { VerdictsModule } from './modules/verdicts/verdicts.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
+import { FeesModule } from './modules/fees/fees.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [blockchainConfig, securityConfig, settlementConfig],
+      load: [blockchainConfig, securityConfig, settlementConfig, feesConfig],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -44,6 +46,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     ReceiptsModule,
     HealthModule,
     MetricsModule,
+    FeesModule,
   ],
   providers: [
     {

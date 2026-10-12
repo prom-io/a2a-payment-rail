@@ -27,6 +27,10 @@ export class Settlement {
   @Column('decimal', { precision: 36, scale: 18 })
   totalAmount!: string;
 
+  // Protocol fee withheld from totalAmount under the fee policy of the chain.
+  @Column('decimal', { precision: 36, scale: 18, nullable: true })
+  feeAmount!: string | null;
+
   @Column({
     type: 'enum',
     enum: SettlementStatus,

@@ -170,6 +170,29 @@ Operator endpoints:
 - `POST /settlements/:id/replay` (role `admin`) resets the attempts and submits
   again at once; `409` for any other status.
 
+## 6c. Fee policy
+
+`FeePolicyService` (`src/modules/fees/`) decides the protocol fee of a
+settlement: `fee = floor(amount * bps / 10000)`, clamped into
+`[minFee, maxFee]` and never above the amount. The default policy comes from
+`FEE_DEFAULT_BPS` (50, the value of `EscrowHub.feePercent`), `FEE_DEFAULT_MIN`
+and `FEE_DEFAULT_MAX`; `FEE_POLICIES` overrides it per chain id and inherits
+whatever it leaves out:
+
+```
+FEE_POLICIES={"71234":{"bps":30,"minFee":"0.0001","maxFee":"5"}}
+```
+
+A rate above 1000 bps (10%), a non-integer rate, or `maxFee < minFee` stops the
+service at startup. Each settlement stores its fee in `settlements.feeAmount`,
+computed for the chain in `CHAIN_ID`. `GET /fees/quote?amount=1.5&chainId=71234`
+returns fee, net and which bound applied; `GET /fees/policies` lists the
+effective policies.
+
+The contract still withholds its own `feePercent` on-chain. Keep the policy of
+a chain equal to the deployed `feePercent` unless bounds are wanted: with
+equal basis points and no bounds both sides round down to the same wei.
+
 ## 7. Gas budget
 
 Targets enforced by the `forge snapshot --diff` CI gate (`.gas-snapshot`):

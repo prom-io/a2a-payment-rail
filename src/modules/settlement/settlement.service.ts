@@ -6,6 +6,7 @@ import { ethers } from 'ethers';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
+import { FeePolicyService } from '../fees/fee-policy.service';
 
 /** Batch parameters; the amount is a decimal string when it comes from the scheduler. */
 export interface SettleBatchInput {
@@ -35,6 +36,7 @@ export class SettlementService {
     private readonly settlementRepo: Repository<Settlement>,
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
+    private readonly feePolicyService: FeePolicyService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
     this.maxAttempts = this.configService.get<number>('settlement.retry.maxAttempts', 5);
@@ -47,6 +49,7 @@ export class SettlementService {
       escrowId: dto.escrowId,
       receiptsHash: dto.receiptsHash,
       totalAmount: dto.totalAmount.toString(),
+      feeAmount: this.feePolicyService.quote(dto.totalAmount.toString()).fee,
       status: SettlementStatus.PENDING,
       receiptCount: dto.receiptCount ?? null,
       packedReceipts: dto.packedReceipts ?? null,

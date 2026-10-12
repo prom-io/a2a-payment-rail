@@ -58,6 +58,7 @@ async function bootstrap() {
     .addTag('settlements', 'Batch settlement processing')
     .addTag('streaming', 'Micro-payment streaming claims')
     .addTag('verdicts', 'Verdict integration endpoints')
+    .addTag('fees', 'Protocol fee policies and quotes')
     .addTag('health', 'Service health checks')
     .build();
 
