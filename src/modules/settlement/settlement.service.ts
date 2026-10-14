@@ -8,6 +8,8 @@ import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { FeePolicyService } from '../fees/fee-policy.service';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { WebhookEvent } from '../webhooks/webhook-events';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 /** Batch parameters; the amount is a decimal string when it comes from the scheduler. */
 export interface SettleBatchInput {
@@ -39,6 +41,7 @@ export class SettlementService {
     private readonly configService: ConfigService,
     private readonly feePolicyService: FeePolicyService,
     private readonly feeLedgerService: FeeLedgerService,
+    private readonly webhooksService: WebhooksService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
     this.maxAttempts = this.configService.get<number>('settlement.retry.maxAttempts', 5);
@@ -109,7 +112,35 @@ export class SettlementService {
           `now ${settlement.status}): ${settlement.lastError}`,
       );
     }
-    return this.settlementRepo.save(settlement);
+    const saved = await this.settlementRepo.save(settlement);
+    this.emitOutcome(saved);
+    return saved;
+  }
+
+  // Only final outcomes are announced; "retrying" is the rail's own business.
+  private emitOutcome(settlement: Settlement): void {
+    const common = {
+      settlementId: settlement.id,
+      escrowId: settlement.escrowId,
+      totalAmount: settlement.totalAmount,
+      feeAmount: settlement.feeAmount ?? null,
+      receiptsHash: settlement.receiptsHash,
+      receiptCount: settlement.receiptCount ?? null,
+      txHash: settlement.txHash ?? null,
+    };
+    if (settlement.status === SettlementStatus.SETTLED) {
+      void this.webhooksService.emit(WebhookEvent.SETTLEMENT_SETTLED, common);
+    } else if (
+      settlement.status === SettlementStatus.REJECTED ||
+      settlement.status === SettlementStatus.DEAD_LETTER
+    ) {
+      void this.webhooksService.emit(WebhookEvent.SETTLEMENT_FAILED, {
+        ...common,
+        status: settlement.status,
+        attempts: settlement.attempts,
+        lastError: settlement.lastError,
+      });
+    }
   }
 
   /** Delay before the next attempt: base, 2x base, 4x base ... capped at maxDelayMs. */

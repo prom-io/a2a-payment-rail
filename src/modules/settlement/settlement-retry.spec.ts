@@ -4,6 +4,7 @@ import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { FeePolicyService } from '../fees/fee-policy.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { configStub } from '../../testing/stubs';
 import { SettlementRetryService } from './settlement-retry.service';
 import { SettlementService } from './settlement.service';
@@ -35,6 +36,7 @@ function build(config: Record<string, unknown> = {}) {
     getContract: jest.fn().mockReturnValue({ settleBatch }),
     getProvider: jest.fn().mockReturnValue(provider),
   };
+  const webhooks = { emit: jest.fn().mockResolvedValue(undefined) };
   const feeLedger = { accrue: jest.fn().mockResolvedValue(null) };
   const config$ = configStub({
     ESCROW_HUB_ADDRESS: '0x' + '1'.repeat(40),
@@ -49,9 +51,10 @@ function build(config: Record<string, unknown> = {}) {
     config$,
     new FeePolicyService(config$),
     feeLedger as unknown as FeeLedgerService,
+    webhooks as unknown as WebhooksService,
   );
   const mined = (hash = '0xtx') => ({ hash, wait: jest.fn().mockResolvedValue({ hash }) });
-  return { service, repo, settleBatch, provider, mined, feeLedger, retry: new SettlementRetryService(service, config$) };
+  return { service, repo, settleBatch, provider, mined, feeLedger, webhooks, retry: new SettlementRetryService(service, config$) };
 }
 
 const input = { escrowId: ESCROW, receiptsHash: HASH, totalAmount: '1.5' };
@@ -91,6 +94,27 @@ describe('settlement retry queue', () => {
     await service.settleBatch(input);
 
     expect(feeLedger.accrue).not.toHaveBeenCalled();
+  });
+
+  it('announces final outcomes to webhooks and stays quiet while retrying', async () => {
+    const { service, settleBatch, mined, webhooks } = build();
+    settleBatch.mockRejectedValueOnce(chainError('TIMEOUT'));
+    const settlement = await service.settleBatch(input);
+    expect(webhooks.emit).not.toHaveBeenCalled();
+
+    settleBatch.mockResolvedValueOnce(mined('0xok'));
+    await service.attempt(settlement, NOW);
+    expect(webhooks.emit).toHaveBeenLastCalledWith(
+      'settlement.settled',
+      expect.objectContaining({ settlementId: settlement.id, txHash: '0xok', feeAmount: '0.0075' }),
+    );
+
+    settleBatch.mockRejectedValueOnce(chainError('CALL_EXCEPTION', 'EscrowHub: not active'));
+    const rejected = await service.settleBatch(input);
+    expect(webhooks.emit).toHaveBeenLastCalledWith(
+      'settlement.failed',
+      expect.objectContaining({ settlementId: rejected.id, status: 'rejected', lastError: 'EscrowHub: not active' }),
+    );
   });
 
   it('queues a transient failure with exponential backoff capped at the maximum', async () => {

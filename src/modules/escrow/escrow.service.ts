@@ -7,6 +7,8 @@ import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
+import { WebhookEvent } from '../webhooks/webhook-events';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class EscrowService {
@@ -18,6 +20,7 @@ export class EscrowService {
     private readonly escrowRepo: Repository<EscrowSession>,
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
+    private readonly webhooksService: WebhooksService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
   }
@@ -59,6 +62,15 @@ export class EscrowService {
       }
     }
 
+    void this.webhooksService.emit(WebhookEvent.ESCROW_OPENED, {
+      escrowId: saved.id,
+      agentA: saved.agentA,
+      agentB: saved.agentB,
+      depositAmount: saved.depositAmount,
+      budgetLimit: saved.budgetLimit,
+      ttl: saved.ttl,
+      txHash: txHash ?? null,
+    });
     return { ...saved, escrowIdHash, txHash };
   }
 
@@ -88,6 +100,7 @@ export class EscrowService {
       }
     }
 
+    this.emitClosed(saved, 'closed', txHash);
     return { ...saved, txHash };
   }
 
@@ -95,7 +108,20 @@ export class EscrowService {
     const session = await this.findById(id);
     session.status = EscrowStatus.CLOSED;
     session.closedAt = new Date();
-    return this.escrowRepo.save(session);
+    const saved = await this.escrowRepo.save(session);
+    this.emitClosed(saved, 'emergency');
+    return saved;
+  }
+
+  // Fire and forget: emit() never rejects and a slow subscriber must not delay the response.
+  private emitClosed(session: EscrowSession, reason: string, txHash?: string): void {
+    void this.webhooksService.emit(WebhookEvent.ESCROW_CLOSED, {
+      escrowId: session.id,
+      status: session.status,
+      reason,
+      closedAt: session.closedAt?.toISOString() ?? null,
+      txHash: txHash ?? null,
+    });
   }
 
   getEscrowIdHash(id: string): string {

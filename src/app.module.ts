@@ -10,6 +10,7 @@ import blockchainConfig from './config/blockchain.config';
 import securityConfig from './config/security.config';
 import settlementConfig from './config/settlement.config';
 import feesConfig from './config/fees.config';
+import webhooksConfig from './config/webhooks.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
@@ -21,12 +22,13 @@ import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { FeesModule } from './modules/fees/fees.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [blockchainConfig, securityConfig, settlementConfig, feesConfig],
+      load: [blockchainConfig, securityConfig, settlementConfig, feesConfig, webhooksConfig],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -47,6 +49,7 @@ import { FeesModule } from './modules/fees/fees.module';
     HealthModule,
     MetricsModule,
     FeesModule,
+    WebhooksModule,
   ],
   providers: [
     {
