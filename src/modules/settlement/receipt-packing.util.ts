@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { merkleRoot } from '../receipts/merkle.util';
 
 /**
  * Packs an array of receipt records into a tight bytes blob for on-chain settlement.
@@ -84,20 +85,9 @@ export function unpackReceipts(blob: string): PackableReceipt[] {
   return out;
 }
 
+/** Root of the batch; the tree itself lives in receipts/merkle.util.ts. */
 export function buildMerkleRoot(leaves: string[]): string {
-  if (leaves.length === 0) return ethers.ZeroHash;
-  let layer = leaves.map((l) => l.toLowerCase());
-  while (layer.length > 1) {
-    const next: string[] = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      const a = layer[i];
-      const b = i + 1 < layer.length ? layer[i + 1] : a;
-      const [lo, hi] = a < b ? [a, b] : [b, a];
-      next.push(ethers.keccak256(ethers.concat([lo, hi])));
-    }
-    layer = next;
-  }
-  return layer[0];
+  return merkleRoot(leaves);
 }
 
 function assertHash32(value: string, field: string): void {

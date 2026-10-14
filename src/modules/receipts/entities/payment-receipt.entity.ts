@@ -35,6 +35,10 @@ export class PaymentReceipt {
   @Column({ type: 'uuid', nullable: true })
   settlementId!: string | null;
 
+  // Position of the receipt inside its batch: the leaf index of its Merkle proof.
+  @Column({ type: 'int', nullable: true })
+  batchIndex!: number | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

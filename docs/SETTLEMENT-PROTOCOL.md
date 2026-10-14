@@ -78,6 +78,28 @@ blob is not sent on-chain yet: it is the payload format for a hub version that
 accepts receipt data, and until then it is what an auditor re-derives the root
 from.
 
+### 3.2 Merkle batching and inclusion proofs
+
+The batch root (`settlement.receiptsHash`) is a Merkle root over the receipt
+hashes in batch order (`src/modules/receipts/merkle.util.ts`): a parent is
+`keccak256(min(a, b) ++ max(a, b))` and an odd level pairs its last node with
+itself. Because pairs are sorted, a proof is a plain list of sibling hashes.
+
+The position of a receipt in its batch is stored (`payment_receipts.batchIndex`),
+so the tree can be rebuilt at any time:
+
+- `GET /receipts/proof/:receiptHash` returns
+  `{ receiptHash, settlementId, index, leafCount, root, proof }`; `404` for an
+  unknown receipt, `409` while the receipt is not batched yet. `root` equals
+  `receiptsHash` of the settlement.
+- `POST /receipts/proof/verify` with `{ receiptHash, proof, root }` answers
+  `{ valid }`; the check is pure and needs no database.
+
+A payee verifies its receipt with `log2(N)` hashes and never sees the other
+receipts of the batch. Note that the value passed to `EscrowHub.settleBatch` is
+`keccak256(utf8(receiptsHash))`, so to tie a proof to the chain hash the root
+string once more before comparing it with the `BatchSettled` event.
+
 ## 4. Access list (EIP-2930)
 
 The batcher precomputes the storage slots touched by `settleBatch`:

@@ -1,9 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { PaymentReceipt } from './entities/payment-receipt.entity';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ValidateReceiptDto } from './dto/validate-receipt.dto';
+import { merkleProof, merkleRoot } from './merkle.util';
+
+export interface InclusionProof {
+  receiptHash: string;
+  settlementId: string;
+  /** Leaf index of the receipt inside the batch. */
+  index: number;
+  leafCount: number;
+  /** Equals settlement.receiptsHash of the batch. */
+  root: string;
+  proof: string[];
+}
 
 @Injectable()
 export class ReceiptsService {
@@ -54,9 +66,43 @@ export class ReceiptsService {
     });
   }
 
+  /**
+   * Attaches receipts to their settlement. The order of `receiptIds` is the
+   * leaf order of the batch and is stored, so a proof can be rebuilt later.
+   */
   async markSettled(receiptIds: string[], settlementId: string): Promise<void> {
     if (receiptIds.length === 0) return;
-    await this.receiptRepo.update({ id: In(receiptIds) }, { settlementId });
+    await this.receiptRepo.manager.transaction(async (manager) => {
+      for (const [batchIndex, id] of receiptIds.entries()) {
+        await manager.update(PaymentReceipt, { id }, { settlementId, batchIndex });
+      }
+    });
+  }
+
+  /** Merkle proof that a receipt is part of the batch it was settled in. */
+  async inclusionProof(receiptHash: string): Promise<InclusionProof> {
+    const receipt = await this.receiptRepo.findOne({ where: { receiptHash } });
+    if (!receipt) throw new NotFoundException(`Receipt ${receiptHash} not found`);
+    if (!receipt.settlementId) {
+      throw new ConflictException(`Receipt ${receiptHash} is not part of a settlement batch yet`);
+    }
+
+    const batch = await this.receiptRepo.find({
+      where: { settlementId: receipt.settlementId },
+      // createdAt/id only decide the order of batches written before batchIndex existed
+      order: { batchIndex: 'ASC', createdAt: 'ASC', id: 'ASC' },
+    });
+    const leaves = batch.map((row) => row.receiptHash);
+    const index = batch.findIndex((row) => row.id === receipt.id);
+
+    return {
+      receiptHash: receipt.receiptHash,
+      settlementId: receipt.settlementId,
+      index,
+      leafCount: leaves.length,
+      root: merkleRoot(leaves),
+      proof: merkleProof(leaves, index),
+    };
   }
 
   async validate(
