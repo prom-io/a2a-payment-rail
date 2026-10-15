@@ -53,6 +53,16 @@ export class WebhooksController {
     return this.webhooksService.remove(id);
   }
 
+  @Post(':id/rotate-secret')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Issue a new signing secret for a subscription' })
+  @ApiParam({ name: 'id', description: 'Subscription UUID' })
+  @ApiResponse({ status: 200, description: 'Subscription with its new secret, shown only here' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  rotateSecret(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.webhooksService.rotateSecret(id);
+  }
+
   @Get(':id/deliveries')
   @ApiOperation({ summary: 'Most recent deliveries of a subscription' })
   @ApiParam({ name: 'id', description: 'Subscription UUID' })

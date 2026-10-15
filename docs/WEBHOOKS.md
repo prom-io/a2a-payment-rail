@@ -26,6 +26,7 @@ All routes require a bearer token with role `admin` or `service`.
 | `POST /webhooks`                | create: `{ url, events[], description? }`           |
 | `GET /webhooks`                 | list subscriptions, without secrets                 |
 | `DELETE /webhooks/:id`          | remove a subscription                               |
+| `POST /webhooks/:id/rotate-secret` | issue a new secret (returned once)               |
 | `GET /webhooks/:id/deliveries`  | the 50 most recent deliveries with their outcome    |
 
 `POST /webhooks` answers with the subscription including its `secret` (32
@@ -43,6 +44,7 @@ POST <subscription url>
 Content-Type: application/json
 X-Prom-Event: settlement.settled
 X-Prom-Delivery: 6a1f...            (delivery id, same as "id" in the body)
+X-Prom-Signature: t=1780315200,v1=5f2c...
 
 {
   "id": "6a1f...",
@@ -60,6 +62,50 @@ X-Prom-Delivery: 6a1f...            (delivery id, same as "id" in the body)
   fail the API call that caused them.
 - Every delivery is stored in `webhook_deliveries`, so the outcome can be
   inspected through `GET /webhooks/:id/deliveries`.
+
+## Verifying a delivery
+
+Every delivery is signed with the secret of its subscription:
+
+```
+X-Prom-Signature: t=<unix seconds>,v1=<hex>
+v1 = HMAC-SHA256(secret, "<t>.<raw request body>")
+```
+
+A receiver must:
+
+1. compute the HMAC over the timestamp from the header, a dot and the **raw**
+   body bytes (not re-serialised JSON), and compare it in constant time;
+2. reject the request when `|now - t|` exceeds its tolerance (300 seconds is
+   the default of the helper below). The timestamp is part of the signed
+   payload, so it cannot be moved without breaking the signature;
+3. remember `X-Prom-Delivery` for at least the tolerance window and ignore an
+   id it has already processed. Steps 2 and 3 together stop replays: an old
+   capture is too old, a recent one is a known id.
+
+The header is signed when the request is sent, so a redelivery has a fresh
+timestamp and the same delivery id.
+
+Node receivers can reuse the rail's own check
+(`src/modules/webhooks/webhook-signature.ts`):
+
+```ts
+const check = verifySignatureHeader({
+  secret,                                   // from POST /webhooks
+  header: req.headers['x-prom-signature'],
+  body: rawBody,                            // string, exactly as received
+  toleranceSeconds: 300,
+});
+if (!check.valid) return res.status(401).end(check.reason);
+```
+
+`check.reason` is `malformed_header`, `timestamp_out_of_tolerance` or
+`signature_mismatch`. A header may carry several `v1` values; any match is
+accepted, and unknown keys are ignored.
+
+`POST /webhooks/:id/rotate-secret` replaces the secret at once: deliveries
+sent afterwards verify only against the new one, so deploy the new secret to
+the receiver (accepting both for a moment) before or right after rotating.
 
 `data` by event:
 

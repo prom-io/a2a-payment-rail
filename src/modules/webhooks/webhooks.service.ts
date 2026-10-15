@@ -7,6 +7,7 @@ import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { WebhookDelivery, WebhookDeliveryStatus } from './entities/webhook-delivery.entity';
 import { WebhookSubscription } from './entities/webhook-subscription.entity';
 import { WebhookEnvelope, WebhookEvent } from './webhook-events';
+import { buildSignatureHeader, SIGNATURE_HEADER } from './webhook-signature';
 import { WebhookTransport } from './webhook-transport';
 
 export type WebhookSubscriptionView = Omit<WebhookSubscription, 'secret'>;
@@ -62,6 +63,14 @@ export class WebhooksService {
   async remove(id: string): Promise<void> {
     const result = await this.subscriptions.delete({ id });
     if (!result.affected) throw new NotFoundException(`Webhook subscription ${id} not found`);
+  }
+
+  /** Replaces the secret. Deliveries sent from now on verify only against the new one. */
+  async rotateSecret(id: string): Promise<WebhookSubscription> {
+    const subscription = await this.subscriptions.findOne({ where: { id } });
+    if (!subscription) throw new NotFoundException(`Webhook subscription ${id} not found`);
+    subscription.secret = randomBytes(32).toString('hex');
+    return this.subscriptions.save(subscription);
   }
 
   async listDeliveries(subscriptionId: string, limit = 50): Promise<WebhookDelivery[]> {
@@ -140,12 +149,15 @@ export class WebhooksService {
     return this.deliveries.save(delivery);
   }
 
+  // Signed at send time, so every redelivery carries a fresh timestamp and a
+  // receiver's tolerance window applies to the attempt, not to the event.
   private buildHeaders(
     delivery: WebhookDelivery,
-    _subscription: WebhookSubscription,
-    _body: string,
+    subscription: WebhookSubscription,
+    body: string,
   ): Record<string, string> {
     return {
+      [SIGNATURE_HEADER]: buildSignatureHeader(subscription.secret, body),
       'Content-Type': 'application/json',
       'User-Agent': 'a2a-payment-rail-webhooks/1',
       'X-Prom-Event': delivery.event,
