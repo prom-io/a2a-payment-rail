@@ -29,9 +29,14 @@ export function webhookHarness(config: Record<string, unknown> = {}) {
     }),
     find: jest.fn(async (options: { where?: Record<string, unknown> } = {}) =>
       rows.filter((row) =>
-        Object.entries(options.where ?? {}).every(
-          ([key, value]) => (row as Record<string, unknown>)[key] === value,
-        ),
+        Object.entries(options.where ?? {}).every(([key, value]) => {
+          const actual = (row as Record<string, unknown>)[key];
+          // FindOperator from LessThanOrEqual(date): the only operator the service uses
+          if (value && typeof value === 'object' && 'value' in value) {
+            return actual instanceof Date && actual.getTime() <= (value.value as Date).getTime();
+          }
+          return actual === value;
+        }),
       ),
     ),
     findOne: jest.fn(async (options: { where: { id: string } }) =>

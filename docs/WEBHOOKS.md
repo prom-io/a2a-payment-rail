@@ -55,13 +55,42 @@ X-Prom-Signature: t=1780315200,v1=5f2c...
 ```
 
 - Any `2xx` answer within `WEBHOOK_TIMEOUT_MS` (default 5000) marks the
-  delivery `delivered`; anything else marks it `failed` and records the status
-  or the error in `lastError`.
+  delivery `delivered`; anything else marks it `failed`, records the status
+  or the error in `lastError` and schedules a retry (see below).
 - Redirects are not followed.
 - Deliveries are sent after the state change is committed and never block or
   fail the API call that caused them.
 - Every delivery is stored in `webhook_deliveries`, so the outcome can be
   inspected through `GET /webhooks/:id/deliveries`.
+
+## Retries
+
+A failed delivery is retried with exponential backoff by `WebhookRetryService`,
+which polls `webhook_deliveries` for `failed` rows whose `nextAttemptAt` has
+passed every `WEBHOOK_RETRY_TICK_MS` (default 10 s).
+
+| variable                      | default | meaning                                  |
+|-------------------------------|--------:|------------------------------------------|
+| `WEBHOOK_MAX_ATTEMPTS`        |       6 | attempts per delivery, the first included |
+| `WEBHOOK_RETRY_BASE_DELAY_MS` |   10000 | delay before the second attempt          |
+| `WEBHOOK_RETRY_MAX_DELAY_MS`  | 3600000 | ceiling of the doubled delay             |
+| `WEBHOOK_RETRY_ENABLED`       |    true | `false` stops the poller                 |
+
+With the defaults the attempts are spaced 10 s, 20 s, 40 s, 80 s and 160 s
+apart. The delay is counted from the failed attempt.
+
+A delivery ends as `exhausted`, and is not sent again, when
+
+- the attempts are used up;
+- the endpoint answers `410 Gone`: the subscription is also set inactive, since
+  the subscriber said the endpoint will not come back;
+- its subscription was removed or deactivated in the meantime.
+
+Timeouts, connection errors and every non-2xx status other than 410 are
+retried. A redelivery keeps the delivery id (`X-Prom-Delivery` and `id` in the
+body) and gets a new signature timestamp, so receivers must treat the id as
+the idempotency key: the same event can arrive more than once, for example
+when the receiver processed it but answered too late.
 
 ## Verifying a delivery
 

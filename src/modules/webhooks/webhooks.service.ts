@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
-import { Repository } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { WebhookDelivery, WebhookDeliveryStatus } from './entities/webhook-delivery.entity';
 import { WebhookSubscription } from './entities/webhook-subscription.entity';
@@ -13,6 +13,7 @@ import { WebhookTransport } from './webhook-transport';
 export type WebhookSubscriptionView = Omit<WebhookSubscription, 'secret'>;
 
 const MAX_ERROR_LENGTH = 500;
+const HTTP_GONE = 410;
 
 /**
  * Webhook subscriptions and event fan-out.
@@ -26,6 +27,9 @@ export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
   private readonly timeoutMs: number;
   private readonly allowHttp: boolean;
+  private readonly maxAttempts: number;
+  private readonly baseDelayMs: number;
+  private readonly maxDelayMs: number;
 
   constructor(
     @InjectRepository(WebhookSubscription)
@@ -37,6 +41,9 @@ export class WebhooksService {
   ) {
     this.timeoutMs = configService.get<number>('webhooks.timeoutMs', 5_000);
     this.allowHttp = configService.get<boolean>('webhooks.allowHttp', true);
+    this.maxAttempts = configService.get<number>('webhooks.retry.maxAttempts', 6);
+    this.baseDelayMs = configService.get<number>('webhooks.retry.baseDelayMs', 10_000);
+    this.maxDelayMs = configService.get<number>('webhooks.retry.maxDelayMs', 3_600_000);
   }
 
   /** The only response that carries the secret. */
@@ -82,7 +89,11 @@ export class WebhooksService {
   }
 
   /** Records one delivery per interested subscription and sends it. */
-  async emit(event: WebhookEvent, data: Record<string, unknown>): Promise<void> {
+  async emit(
+    event: WebhookEvent,
+    data: Record<string, unknown>,
+    now: Date = new Date(),
+  ): Promise<void> {
     try {
       const active = await this.subscriptions.find({ where: { active: true } });
       const interested = active.filter((subscription) => subscription.events.includes(event));
@@ -97,7 +108,7 @@ export class WebhooksService {
               attempts: 0,
             }),
           );
-          await this.deliver(delivery, subscription);
+          await this.deliver(delivery, subscription, now);
         }),
       );
     } catch (error) {
@@ -105,10 +116,45 @@ export class WebhooksService {
     }
   }
 
-  /** One HTTP attempt; the outcome is written to the delivery row. */
+  /** Failed deliveries whose next attempt is due, oldest first. */
+  async findDueDeliveries(now: Date, limit: number): Promise<WebhookDelivery[]> {
+    return this.deliveries.find({
+      where: { status: WebhookDeliveryStatus.FAILED, nextAttemptAt: LessThanOrEqual(now) },
+      order: { nextAttemptAt: 'ASC' },
+      take: limit,
+    });
+  }
+
+  /** Next attempt of a failed delivery; gives up if its subscription is gone or paused. */
+  async redeliver(delivery: WebhookDelivery, now: Date = new Date()): Promise<WebhookDelivery> {
+    const subscription = await this.subscriptions.findOne({ where: { id: delivery.subscriptionId } });
+    if (!subscription || !subscription.active) {
+      delivery.status = WebhookDeliveryStatus.EXHAUSTED;
+      delivery.nextAttemptAt = null;
+      delivery.lastError = 'subscription is no longer active';
+      return this.deliveries.save(delivery);
+    }
+    return this.deliver(delivery, subscription, now);
+  }
+
+  /** Delay before the next attempt: base, 2x base, 4x base ... capped at maxDelayMs. */
+  backoffMs(attempts: number): number {
+    const exponent = Math.min(Math.max(attempts - 1, 0), 30);
+    return Math.min(this.baseDelayMs * 2 ** exponent, this.maxDelayMs);
+  }
+
+  /**
+   * One HTTP attempt; the outcome is written to the delivery row.
+   *
+   *   2xx                 -> delivered
+   *   410 Gone            -> exhausted, and the subscription is paused
+   *   anything else       -> failed, retried after backoffMs(attempts);
+   *                          exhausted once maxAttempts is reached
+   */
   async deliver(
     delivery: WebhookDelivery,
     subscription: WebhookSubscription,
+    now: Date = new Date(),
   ): Promise<WebhookDelivery> {
     const envelope: WebhookEnvelope = {
       id: delivery.id,
@@ -129,7 +175,7 @@ export class WebhooksService {
       delivery.responseStatus = response.status;
       if (response.status >= 200 && response.status < 300) {
         delivery.status = WebhookDeliveryStatus.DELIVERED;
-        delivery.deliveredAt = new Date();
+        delivery.deliveredAt = now;
         delivery.lastError = null;
       } else {
         delivery.status = WebhookDeliveryStatus.FAILED;
@@ -140,10 +186,21 @@ export class WebhooksService {
       delivery.responseStatus = null;
       delivery.lastError = String((error as Error).message ?? error).slice(0, MAX_ERROR_LENGTH);
     }
+    delivery.nextAttemptAt = null;
     if (delivery.status === WebhookDeliveryStatus.FAILED) {
+      if (delivery.responseStatus === HTTP_GONE) {
+        // The subscriber says the endpoint is gone for good: stop sending to it.
+        delivery.status = WebhookDeliveryStatus.EXHAUSTED;
+        subscription.active = false;
+        await this.subscriptions.save(subscription);
+      } else if (delivery.attempts >= this.maxAttempts) {
+        delivery.status = WebhookDeliveryStatus.EXHAUSTED;
+      } else {
+        delivery.nextAttemptAt = new Date(now.getTime() + this.backoffMs(delivery.attempts));
+      }
       this.logger.warn(
         `Webhook ${delivery.event} to subscription ${subscription.id} failed ` +
-          `(attempt ${delivery.attempts}): ${delivery.lastError}`,
+          `(attempt ${delivery.attempts}/${this.maxAttempts}, now ${delivery.status}): ${delivery.lastError}`,
       );
     }
     return this.deliveries.save(delivery);
