@@ -139,6 +139,37 @@ streaming module exposes `POST /streaming/refund` which:
 5. Returns the refund record. The actual on-chain refund is then triggered by
    the batcher as a regular `closeEscrow` call.
 
+### 6.1 Refunds of expired and cancelled sessions
+
+Sessions that end without the payer closing them are refunded by
+`RefundsService` (`src/modules/refunds/`):
+
+- **cancelled**: `POST /escrow/:id/cancel` moves an `open` session to
+  `cancelled` (`409` for any other status);
+- **expired**: the expiry sweep moves `open` sessions with
+  `createdAt + ttl <= now` to `expired`.
+
+`POST /refunds/:escrowId` then returns the unspent deposit:
+
+```
+refund = deposit - sum(settled settlements) - sum(stream claims)   (floor 0)
+```
+
+One row per escrow is kept in `escrow_refunds` (`escrowId` is unique). A
+repeated request returns that row; if its transaction failed (`failed`,
+`lastError`), the request retries it. A session in any other status is `409`.
+With `ESCROW_HUB_ADDRESS` set the refund calls `EscrowHub.emergencyClose`, the
+owner-only function that pays `deposit - spent` back to the payer
+(`closeEscrow` is payer-only and cannot be called by the rail); without a hub
+the refund is recorded off-chain only. A completed refund stamps
+`escrow_sessions.refundedAt` and emits `escrow.refunded`.
+
+The sweep is opt-in (`ESCROW_EXPIRY_SWEEP_ENABLED=true`): every
+`ESCROW_EXPIRY_SWEEP_MS` (60 s) it expires due sessions and refunds up to
+`ESCROW_EXPIRY_SWEEP_BATCH` (50) expired or cancelled sessions that have no
+`refundedAt` yet. With the sweep off, sessions are not marked expired on their
+own and refunds happen only through the endpoint.
+
 ## 6a. Batch scheduler
 
 `SettlementBatchScheduler` (`src/modules/settlement/settlement-batch.scheduler.ts`)

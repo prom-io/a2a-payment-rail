@@ -57,6 +57,20 @@ export class EscrowController {
     return this.escrowService.close(id);
   }
 
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiOperation({
+    summary: 'Cancel an open escrow session',
+    description: 'Marks the session cancelled. The deposit is returned through POST /refunds/:escrowId.',
+  })
+  @ApiResponse({ status: 200, description: 'Escrow cancelled' })
+  @ApiResponse({ status: 404, description: 'Escrow session not found' })
+  @ApiResponse({ status: 409, description: 'Escrow is not open' })
+  cancel(@Param('id') id: string) {
+    return this.escrowService.cancel(id);
+  }
+
   @Post(':id/emergency-close')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)

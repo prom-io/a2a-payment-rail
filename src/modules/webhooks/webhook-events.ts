@@ -2,6 +2,7 @@
 export enum WebhookEvent {
   ESCROW_OPENED = 'escrow.opened',
   ESCROW_CLOSED = 'escrow.closed',
+  ESCROW_REFUNDED = 'escrow.refunded',
   SETTLEMENT_SETTLED = 'settlement.settled',
   SETTLEMENT_FAILED = 'settlement.failed',
 }

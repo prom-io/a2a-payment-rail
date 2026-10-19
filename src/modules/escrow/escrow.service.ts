@@ -1,7 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { ethers } from 'ethers';
 import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
@@ -111,6 +111,58 @@ export class EscrowService {
     const saved = await this.escrowRepo.save(session);
     this.emitClosed(saved, 'emergency');
     return saved;
+  }
+
+  /** Payer backs out of a session that is still open; the deposit is returned by a refund. */
+  async cancel(id: string): Promise<EscrowSession> {
+    const session = await this.findById(id);
+    if (session.status !== EscrowStatus.OPEN) {
+      throw new ConflictException(`Escrow ${id} is ${session.status}; only an open session can be cancelled`);
+    }
+    session.status = EscrowStatus.CANCELLED;
+    session.closedAt = new Date();
+    const saved = await this.escrowRepo.save(session);
+    this.emitClosed(saved, 'cancelled');
+    return saved;
+  }
+
+  /** Marks open sessions whose TTL has run out as expired. Returns how many. */
+  async expireDue(now: Date = new Date()): Promise<number> {
+    const result = await this.escrowRepo
+      .createQueryBuilder()
+      .update(EscrowSession)
+      .set({ status: EscrowStatus.EXPIRED, closedAt: now })
+      .where('status = :open', { open: EscrowStatus.OPEN })
+      .andWhere(`"createdAt" + ("ttl" * interval '1 second') <= :now`, { now })
+      .returning('id')
+      .execute();
+    const expired: Array<{ id: string }> = Array.isArray(result.raw) ? result.raw : [];
+    for (const { id } of expired) {
+      void this.webhooksService.emit(WebhookEvent.ESCROW_CLOSED, {
+        escrowId: id,
+        status: EscrowStatus.EXPIRED,
+        reason: 'expired',
+        closedAt: now.toISOString(),
+        txHash: null,
+      });
+    }
+    return result.affected ?? expired.length;
+  }
+
+  /** Expired or cancelled sessions whose deposit has not been returned yet, oldest first. */
+  async findAwaitingRefund(limit: number): Promise<EscrowSession[]> {
+    return this.escrowRepo.find({
+      where: {
+        status: In([EscrowStatus.EXPIRED, EscrowStatus.CANCELLED]),
+        refundedAt: IsNull(),
+      },
+      order: { closedAt: 'ASC' },
+      take: limit,
+    });
+  }
+
+  async markRefunded(id: string, at: Date = new Date()): Promise<void> {
+    await this.escrowRepo.update({ id }, { refundedAt: at });
   }
 
   // Fire and forget: emit() never rejects and a slow subscriber must not delay the response.

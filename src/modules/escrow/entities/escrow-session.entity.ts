@@ -11,6 +11,7 @@ export enum EscrowStatus {
   CLOSED = 'closed',
   DISPUTED = 'disputed',
   EXPIRED = 'expired',
+  CANCELLED = 'cancelled',
 }
 
 @Entity('escrow_sessions')
@@ -51,4 +52,8 @@ export class EscrowSession {
 
   @Column({ type: 'timestamp', nullable: true })
   closedAt!: Date | null;
+
+  // Set once the unspent deposit of an expired or cancelled session was returned.
+  @Column({ type: 'timestamp', nullable: true })
+  refundedAt!: Date | null;
 }
