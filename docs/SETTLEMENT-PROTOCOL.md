@@ -152,7 +152,8 @@ Sessions that end without the payer closing them are refunded by
 `POST /refunds/:escrowId` then returns the unspent deposit:
 
 ```
-refund = deposit - sum(settled settlements) - sum(stream claims)   (floor 0)
+refund = deposit - sum(settled settlements) - sum(stream claims)
+                 - releasedAmount                                   (floor 0)
 ```
 
 One row per escrow is kept in `escrow_refunds` (`escrowId` is unique). A
@@ -169,6 +170,31 @@ The sweep is opt-in (`ESCROW_EXPIRY_SWEEP_ENABLED=true`): every
 `ESCROW_EXPIRY_SWEEP_BATCH` (50) expired or cancelled sessions that have no
 `refundedAt` yet. With the sweep off, sessions are not marked expired on their
 own and refunds happen only through the endpoint.
+
+### 6.2 Partial release
+
+`POST /escrow/:id/release` with `{ amount, note? }` pays part of an open
+session to the payee and leaves the session open (`EscrowReleaseService`).
+`amount` is a decimal string with up to 18 decimals.
+
+`escrow_sessions.releasedAmount` is the running total and
+`remainingBalance = min(deposit, budget) - releasedAmount`. The total is moved
+by one conditional `UPDATE ... WHERE status = 'open' AND releasedAmount + :amount
+<= LEAST(depositAmount, budgetLimit)`, so concurrent releases cannot overdraw
+the session; a request that does not fit is `409` and changes nothing. Every
+release is a row in `escrow_releases`.
+
+With `ESCROW_HUB_ADDRESS` set the release is paid out through
+`EscrowHub.settleBatch(escrowId, keccak256(releaseId), amount)`. If that
+transaction fails, the amount is returned to the session, the row is kept as
+`failed` with `lastError`, and the request answers `502`.
+
+- `GET /escrow/:id/balance` returns
+  `{ depositAmount, budgetLimit, releasedAmount, remainingBalance, status }`;
+- `GET /escrow/:id/releases` lists the releases, oldest first;
+- a completed release emits the `escrow.released` webhook event.
+
+Releases are subtracted from a later refund (6.1).
 
 ## 6a. Batch scheduler
 

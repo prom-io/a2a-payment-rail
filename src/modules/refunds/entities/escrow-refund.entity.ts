@@ -27,7 +27,7 @@ export class EscrowRefund {
   @Column('decimal', { precision: 36, scale: 18 })
   depositAmount!: string;
 
-  // Settled batches plus stream claims at the moment the refund was computed.
+  // Settled batches, stream claims and partial releases when the refund was computed.
   @Column('decimal', { precision: 36, scale: 18 })
   spentAmount!: string;
 

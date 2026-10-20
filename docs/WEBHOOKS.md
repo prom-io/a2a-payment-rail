@@ -11,6 +11,7 @@ Code: `src/modules/webhooks/`.
 |----------------------|-----------------------------------------------------------------|
 | `escrow.opened`      | `POST /escrow` stored the session (after the on-chain attempt)  |
 | `escrow.closed`      | a session was closed, emergency-closed, cancelled or expired    |
+| `escrow.released`    | part of an open session was released to the payee               |
 | `escrow.refunded`    | the unspent deposit of an expired or cancelled session was returned |
 | `settlement.settled` | a settlement was mined (first attempt, retry or manual replay)  |
 | `settlement.failed`  | a settlement became `rejected` or `dead_letter`                 |
@@ -143,6 +144,7 @@ the receiver (accepting both for a moment) before or right after rotating.
 |----------------------|------------------------------------------------------------------------------------------|
 | `escrow.opened`      | `escrowId, agentA, agentB, depositAmount, budgetLimit, ttl, txHash`                      |
 | `escrow.closed`      | `escrowId, status, reason, closedAt, txHash`                                             |
+| `escrow.released`    | `escrowId, releaseId, amount, releasedAmount, remainingBalance, txHash`                  |
 | `escrow.refunded`    | `escrowId, reason, depositAmount, spentAmount, refundAmount, txHash`                     |
 | `settlement.settled` | `settlementId, escrowId, totalAmount, feeAmount, receiptsHash, receiptCount, txHash`     |
 | `settlement.failed`  | the same, plus `status, attempts, lastError`                                             |

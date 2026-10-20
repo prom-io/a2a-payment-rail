@@ -31,6 +31,10 @@ export class EscrowSession {
   @Column('decimal', { precision: 36, scale: 18 })
   budgetLimit!: string;
 
+  // Running total paid out through partial releases; see EscrowReleaseService.
+  @Column('decimal', { precision: 36, scale: 18, default: 0 })
+  releasedAmount!: string;
+
   @Column('jsonb', { default: {} })
   policyFlags!: Record<string, unknown>;
 

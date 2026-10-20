@@ -20,6 +20,7 @@ function sumRepo(total: string) {
 
 function build(options: {
   status?: EscrowStatus;
+  released?: string;
   deposit?: string;
   settled?: string;
   claimed?: string;
@@ -29,6 +30,7 @@ function build(options: {
     id: ESCROW,
     status: options.status ?? EscrowStatus.EXPIRED,
     depositAmount: options.deposit ?? '2.000000000000000000',
+    releasedAmount: options.released ?? '0',
   } as EscrowSession;
   const rows: EscrowRefund[] = [];
   const refunds = {
@@ -91,6 +93,12 @@ describe('RefundsService', () => {
       spentAmount: '1.25',
       refundAmount: '0.75',
     });
+  });
+
+  it('subtracts what was already paid out through partial releases', async () => {
+    const { service } = build({ released: '0.4', claimed: '0.1' });
+
+    expect(await service.refund(ESCROW)).toMatchObject({ spentAmount: '0.5', refundAmount: '1.5' });
   });
 
   it('never refunds a negative amount', async () => {

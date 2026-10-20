@@ -12,11 +12,16 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiHeader } from '@nestjs
 import { IdempotencyInterceptor } from '../../common/idempotency/idempotency.interceptor';
 import { EscrowService } from './escrow.service';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
+import { ReleaseEscrowDto } from './dto/release-escrow.dto';
+import { EscrowReleaseService } from './escrow-release.service';
 
 @ApiTags('escrow')
 @Controller('escrow')
 export class EscrowController {
-  constructor(private readonly escrowService: EscrowService) {}
+  constructor(
+    private readonly escrowService: EscrowService,
+    private readonly escrowReleaseService: EscrowReleaseService,
+  ) {}
 
   @Post()
   @UseInterceptors(IdempotencyInterceptor)
@@ -55,6 +60,40 @@ export class EscrowController {
   @ApiResponse({ status: 409, description: 'Escrow already closed' })
   close(@Param('id') id: string) {
     return this.escrowService.close(id);
+  }
+
+  @Get(':id/balance')
+  @ApiOperation({ summary: 'Deposit, released total and remaining balance of a session' })
+  @ApiParam({ name: 'id', description: 'Escrow session UUID' })
+  @ApiResponse({ status: 200, description: 'Balance returned' })
+  @ApiResponse({ status: 404, description: 'Escrow session not found' })
+  balance(@Param('id') id: string) {
+    return this.escrowReleaseService.balance(id);
+  }
+
+  @Get(':id/releases')
+  @ApiOperation({ summary: 'List the partial releases of a session' })
+  @ApiParam({ name: 'id', description: 'Escrow session UUID' })
+  @ApiResponse({ status: 200, description: 'Releases, oldest first' })
+  releases(@Param('id') id: string) {
+    return this.escrowReleaseService.findReleases(id);
+  }
+
+  @Post(':id/release')
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Unique key; a retry with the same key and body replays the first response',
+  })
+  @ApiOperation({ summary: 'Release part of the escrow to the payee and keep the session open' })
+  @ApiParam({ name: 'id', description: 'Escrow session UUID' })
+  @ApiResponse({ status: 201, description: 'Release recorded, new balance returned' })
+  @ApiResponse({ status: 404, description: 'Escrow session not found' })
+  @ApiResponse({ status: 409, description: 'Session is not open or the amount exceeds the remaining balance' })
+  @ApiResponse({ status: 502, description: 'On-chain payout failed; the balance was not changed' })
+  release(@Param('id') id: string, @Body() dto: ReleaseEscrowDto) {
+    return this.escrowReleaseService.release(id, dto);
   }
 
   @Post(':id/cancel')

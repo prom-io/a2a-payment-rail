@@ -39,7 +39,8 @@ export interface RefundSweepResult {
  * Returns the unspent deposit of escrow sessions that ended without being
  * closed by the payer: sessions past their TTL and sessions that were cancelled.
  *
- *   refund = deposit - settled batches - stream claims   (never below zero)
+ *   refund = deposit - settled batches - stream claims - partial releases
+ *            (never below zero)
  *
  * One refund row exists per escrow. Requesting a refund again returns that
  * row; if its on-chain transaction failed, the request retries it.
@@ -135,7 +136,8 @@ export class RefundsService implements OnModuleInit, OnModuleDestroy {
 
   private async create(session: EscrowSession, reason: RefundReason): Promise<EscrowRefund> {
     const deposit = toWei(session.depositAmount);
-    const spent = await this.spent(session.id);
+    const spent =
+      (await this.spent(session.id)) + toWei(session.releasedAmount ?? '0');
     if (spent > deposit) {
       this.logger.warn(`Escrow ${session.id} spent ${fromWei(spent)} of a ${fromWei(deposit)} deposit`);
     }
