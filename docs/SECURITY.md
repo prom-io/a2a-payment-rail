@@ -17,6 +17,25 @@ Primary threats:
 | T6 | Leak of internal info via headers | `SecurityHeadersMiddleware` (CSP, HSTS, X-Frame-Options) |
 | T7 | Passwords stored in plaintext | `PasswordService` with `scrypt` + `timingSafeEqual` |
 | T8 | Unlogged privileged actions | `AuditInterceptor` on every mutating request |
+| T9 | Compromised or runaway payer drains its funds into escrow | Rolling spending limit per payer (`SpendingLimitService`) |
+
+## Spending limits
+
+`POST /escrow` counts the deposit against the payer (`agentA`):
+
+- the limit is the payer's row in `spending_limits`
+  (`PUT /spending-limits/:payer`, role `admin`, body `{ "dailyLimit": "25" }`)
+  or, without one, `SPENDING_LIMIT_DAILY_DEFAULT`. An empty or zero default
+  means unlimited; an override of `"0"` exempts a single payer;
+  `DELETE /spending-limits/:payer` removes the override;
+- "spent" is the sum of deposits of the sessions the payer opened in the last
+  `SPENDING_LIMIT_WINDOW_HOURS` (24), cancelled sessions excluded. The window
+  rolls, it does not reset at midnight;
+- a deposit that would exceed the limit is refused with `403` before anything
+  is stored or sent on-chain. Check and insert run in one transaction under a
+  per-payer Postgres advisory lock, so concurrent requests cannot pass together;
+- `GET /spending-limits/:payer` returns
+  `{ dailyLimit, source, windowHours, windowStart, spent, remaining }`.
 
 ## Authentication
 

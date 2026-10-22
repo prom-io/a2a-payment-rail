@@ -59,6 +59,7 @@ async function bootstrap() {
     .addTag('streaming', 'Micro-payment streaming claims')
     .addTag('verdicts', 'Verdict integration endpoints')
     .addTag('fees', 'Protocol fee policies and quotes')
+    .addTag('spending-limits', 'Rolling daily spending limits per payer')
     .addTag('refunds', 'Refunds of expired and cancelled escrow sessions')
     .addTag('webhooks', 'Webhook subscriptions for escrow and settlement events')
     .addTag('health', 'Service health checks')

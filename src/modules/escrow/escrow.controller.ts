@@ -33,6 +33,7 @@ export class EscrowController {
   @ApiOperation({ summary: 'Open a new escrow session' })
   @ApiResponse({ status: 201, description: 'Escrow session created' })
   @ApiResponse({ status: 400, description: 'Invalid escrow parameters' })
+  @ApiResponse({ status: 403, description: 'Deposit exceeds the spending limit of the payer' })
   open(@Body() dto: OpenEscrowDto) {
     return this.escrowService.open(dto);
   }

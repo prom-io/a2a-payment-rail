@@ -9,6 +9,7 @@ import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { WebhookEvent } from '../webhooks/webhook-events';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { SpendingLimitService } from './spending-limit.service';
 
 @Injectable()
 export class EscrowService {
@@ -21,6 +22,7 @@ export class EscrowService {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly webhooksService: WebhooksService,
+    private readonly spendingLimitService: SpendingLimitService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
   }
@@ -36,7 +38,13 @@ export class EscrowService {
       ttl: dto.ttl,
       status: EscrowStatus.OPEN,
     });
-    const saved = await this.escrowRepo.save(session);
+    // The deposit counts against the payer's rolling spending limit; a session
+    // over the limit is refused here, before anything is stored or sent on-chain.
+    const saved = await this.spendingLimitService.withinLimit(
+      dto.agentA,
+      session.depositAmount,
+      (manager) => manager.save(session),
+    );
 
     let txHash: string | undefined;
     const escrowIdHash = ethers.keccak256(ethers.toUtf8Bytes(saved.id));
