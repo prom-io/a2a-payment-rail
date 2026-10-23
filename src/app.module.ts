@@ -12,6 +12,7 @@ import settlementConfig from './config/settlement.config';
 import feesConfig from './config/fees.config';
 import webhooksConfig from './config/webhooks.config';
 import refundsConfig from './config/refunds.config';
+import reconciliationConfig from './config/reconciliation.config';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
@@ -25,12 +26,13 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RefundsModule } from './modules/refunds/refunds.module';
+import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [blockchainConfig, securityConfig, settlementConfig, feesConfig, webhooksConfig, refundsConfig],
+      load: [blockchainConfig, securityConfig, settlementConfig, feesConfig, webhooksConfig, refundsConfig, reconciliationConfig],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -53,6 +55,7 @@ import { RefundsModule } from './modules/refunds/refunds.module';
     FeesModule,
     WebhooksModule,
     RefundsModule,
+    ReconciliationModule,
   ],
   providers: [
     {

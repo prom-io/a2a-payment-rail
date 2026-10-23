@@ -21,6 +21,38 @@ This document describes how tracing, metrics, dashboards, and alerts are wired f
 - Bucket tuning:
   - Use `METRICS_HTTP_BUCKETS` to override histogram buckets (`comma-separated seconds`)
 
+## Reconciliation
+
+`ReconciliationService` (`src/modules/reconciliation/`) compares the ledger
+with `EscrowHub`. For every open session, oldest first, up to
+`RECONCILIATION_BATCH_SIZE` (200):
+
+| finding                 | meaning                                                          |
+|-------------------------|------------------------------------------------------------------|
+| `missing_on_chain`      | the hub has no escrow with this id                               |
+| `inactive_on_chain`     | the ledger says open, the hub says closed                        |
+| `deposit_mismatch`      | hub deposit differs from the ledger deposit                      |
+| `spent_mismatch`        | hub `spent` differs from settled settlements + partial releases  |
+| `hub_balance_shortfall` | hub balance is below the sum of `deposit - spent` of open sessions |
+
+The balance check uses `>=` because the hub also holds withheld fees, and is
+skipped when a run could not cover every open session. Off-chain stream claims
+are not part of the comparison: `claimStream` is called by the payee, not by
+the rail, so a payee claiming on-chain shows up as `spent_mismatch`.
+
+The job only reports; it never corrects the ledger or sends a transaction.
+Each run is a row in `reconciliation_runs` with status `ok`, `mismatch`,
+`skipped` (no `ESCROW_HUB_ADDRESS`, or a run already in flight) or `failed`
+(the RPC could not be read).
+
+- Periodic: set `RECONCILIATION_INTERVAL_MS` (0, the default, keeps it off).
+- On demand: `POST /reconciliation/run` (role `admin`).
+- Results: `GET /reconciliation/latest`, `GET /reconciliation/runs?limit=`.
+- Series: `payment_rail_reconciliation_mismatches` and
+  `payment_rail_reconciliation_last_run_timestamp_seconds`, both updated by
+  `ok` and `mismatch` runs only. Alert on mismatches `> 0` and on the
+  timestamp going stale (a job that stopped running finds nothing).
+
 ## Dashboards
 
 - Grafana starter dashboard:

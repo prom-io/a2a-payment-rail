@@ -66,6 +66,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 | Fees | `/fees` | Fee policies per chain and fee quotes |
 | Spending limits | `/spending-limits` | Rolling daily deposit limits per payer |
 | Refunds | `/refunds` | Refunds of expired and cancelled escrow sessions |
+| Reconciliation | `/reconciliation` | Ledger vs on-chain comparison runs |
 | Webhooks | `/webhooks` | Subscriptions to escrow and settlement events |
 | Health | `/health` | Service health check |
 
