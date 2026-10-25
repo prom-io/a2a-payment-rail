@@ -54,7 +54,7 @@ jobs:
       # after the push would mean a vulnerable image is already pullable by the
       # time anyone finds out.
       - name: Build for scanning
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
@@ -99,7 +99,7 @@ jobs:
           exit-code: '1'
 
       - name: Push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
