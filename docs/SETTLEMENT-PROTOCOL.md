@@ -249,6 +249,35 @@ Operator endpoints:
 - `POST /settlements/:id/replay` (role `admin`) resets the attempts and submits
   again at once; `409` for any other status.
 
+## 6e. Export
+
+`GET /settlements/export` (role `admin` or `service`) streams settlements out
+for accounting, oldest first.
+
+| parameter  | meaning                                                        |
+|------------|----------------------------------------------------------------|
+| `format`   | `csv` (default) or `ndjson`                                    |
+| `limit`    | rows per page, default 500, capped at 5000                     |
+| `cursor`   | value of `X-Next-Cursor` from the previous page                |
+| `escrowId` | only this escrow                                               |
+| `status`   | `pending`, `settled`, `rejected`, `retrying`, `dead_letter`    |
+| `from`/`to` | ISO-8601 bounds on `createdAt` (`from` inclusive, `to` exclusive) |
+
+Columns, in this order in both formats: `id, escrowId, status, totalAmount,
+feeAmount, receiptsHash, receiptCount, attempts, txHash, createdAt, settledAt`.
+Amounts are decimal strings in both formats; timestamps are ISO-8601 UTC.
+
+Paging is keyset-based on `(createdAt, id)`: a response with more rows behind
+it carries `X-Next-Cursor`; repeat the request with `cursor=<value>` and the
+same filters until the header is absent. A page costs the same however deep
+the export is, and rows inserted during an export cannot move rows between
+pages. `X-Export-Count` is the number of rows in the page.
+
+CSV follows RFC 4180 (CRLF, quotes doubled). The header line is sent on the
+first page only, so the pages concatenate into one valid file. Text cells that
+start with `=`, `+`, `-` or `@` are prefixed with `'` so a spreadsheet does not
+evaluate them. NDJSON is one JSON object per line, each line ending in `\n`.
+
 ## 6c. Fee policy
 
 `FeePolicyService` (`src/modules/fees/`) decides the protocol fee of a
