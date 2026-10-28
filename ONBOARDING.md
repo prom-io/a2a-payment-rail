@@ -189,6 +189,8 @@ The deploy script writes contract addresses to stdout — copy `EscrowHub` addre
 1. Create `src/modules/<module>/entities/<thing>.entity.ts`.
 2. Register it in the module's `forFeature([...])`.
 3. Run `npm run start:dev` once locally — TypeORM `synchronize: true` (dev only) will create the table.
+   New columns on an existing table must be nullable or have a default. If a query filters or sorts on the
+   new entity at volume, add a named composite `@Index` and list it in `docs/DATABASE.md`.
 4. For production: generate a migration (planned — not yet wired into this repo, see "next steps").
 
 ### Add a new contract

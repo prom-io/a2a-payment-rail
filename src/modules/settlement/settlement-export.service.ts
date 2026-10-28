@@ -32,13 +32,18 @@ export interface ExportPage {
 }
 
 interface Cursor {
-  createdAt: Date;
+  /** createdAt exactly as stored, microseconds included. */
+  createdAt: string;
   id: string;
 }
 
-// Postgres keeps microseconds, a JS Date keeps milliseconds. Ordering and
-// comparing on the truncated value keeps the cursor exact on both sides.
-const CREATED_AT_MS = `date_trunc('milliseconds', settlement.createdAt)`;
+// Postgres keeps microseconds, a JS Date keeps milliseconds. The cursor
+// therefore carries the timestamp as text straight from the database: the
+// query can then order and compare on the bare column, which is what lets
+// IDX_settlement_created_id serve it. (Truncating to milliseconds in SQL would
+// be just as exact but turns the column into an expression no index covers.)
+const CURSOR_TIMESTAMP = `to_char(settlement.createdAt, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
+const CURSOR_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/;
 
 /**
  * Settlement export for accounting and audits.
@@ -61,14 +66,16 @@ export class SettlementExportService {
 
     const qb = this.settlements
       .createQueryBuilder('settlement')
-      .orderBy(CREATED_AT_MS, 'ASC')
+      .addSelect(CURSOR_TIMESTAMP, 'cursor_timestamp')
+      .orderBy('settlement.createdAt', 'ASC')
       .addOrderBy('settlement.id', 'ASC')
       // one extra row tells whether there is a next page without a COUNT
       .limit(limit + 1);
 
     if (cursor) {
+      // Row comparison: one range condition on the (createdAt, id) index.
       qb.andWhere(
-        `(${CREATED_AT_MS} > :cursorAt OR (${CREATED_AT_MS} = :cursorAt AND settlement.id > :cursorId))`,
+        '(settlement.createdAt, settlement.id) > (CAST(:cursorAt AS timestamp), CAST(:cursorId AS uuid))',
         { cursorAt: cursor.createdAt, cursorId: cursor.id },
       );
     }
@@ -77,10 +84,13 @@ export class SettlementExportService {
     if (query.from) qb.andWhere('settlement.createdAt >= :from', { from: new Date(query.from) });
     if (query.to) qb.andWhere('settlement.createdAt < :to', { to: new Date(query.to) });
 
-    const rows = await qb.getMany();
+    const { entities: rows, raw } = await qb.getRawAndEntities<{ cursor_timestamp: string }>();
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];
-    const nextCursor = rows.length > limit && last ? encodeCursor(last) : null;
+    const nextCursor =
+      rows.length > limit && last
+        ? encodeCursor({ createdAt: raw[page.length - 1].cursor_timestamp, id: last.id })
+        : null;
 
     return format === ExportFormat.NDJSON
       ? {
@@ -133,23 +143,23 @@ export function csvCell(value: string | number | null): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export function encodeCursor(row: { createdAt: Date; id: string }): string {
-  const payload = JSON.stringify({ t: new Date(row.createdAt).toISOString(), id: row.id });
+export function encodeCursor(row: Cursor): string {
+  const payload = JSON.stringify({ t: row.createdAt, id: row.id });
   return Buffer.from(payload, 'utf8').toString('base64url');
 }
 
 export function decodeCursor(cursor: string): Cursor {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    const createdAt = new Date(parsed.t);
     if (
       typeof parsed.id !== 'string' ||
       !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(parsed.id) ||
-      Number.isNaN(createdAt.getTime())
+      typeof parsed.t !== 'string' ||
+      !CURSOR_TIMESTAMP_PATTERN.test(parsed.t)
     ) {
       throw new Error('bad cursor fields');
     }
-    return { createdAt, id: parsed.id };
+    return { createdAt: parsed.t, id: parsed.id };
   } catch {
     throw new BadRequestException('cursor is not a value returned by a previous export page');
   }

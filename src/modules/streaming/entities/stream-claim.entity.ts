@@ -3,9 +3,12 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('stream_claims')
+// Latest claim of an escrow (every new claim reads it) and the per-escrow sums.
+@Index('IDX_stream_claim_escrow_claimed', ['escrowId', 'claimedAt'])
 export class StreamClaim {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

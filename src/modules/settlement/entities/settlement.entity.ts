@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum SettlementStatus {
@@ -14,6 +15,12 @@ export enum SettlementStatus {
 }
 
 @Entity('settlements')
+// GET /settlements?escrowId=, refund and reconciliation sums per escrow.
+@Index('IDX_settlement_escrow_created', ['escrowId', 'createdAt'])
+// Retry queue poll: status = retrying AND nextRetryAt <= now, and the dead-letter list.
+@Index('IDX_settlement_retry_queue', ['status', 'nextRetryAt'])
+// Keyset pagination of the export: ORDER BY createdAt, id.
+@Index('IDX_settlement_created_id', ['createdAt', 'id'])
 export class Settlement {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

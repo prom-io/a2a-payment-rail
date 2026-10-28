@@ -30,6 +30,9 @@ function settlement(n: number, overrides: Partial<Settlement> = {}): Settlement 
   } as Settlement;
 }
 
+/** What to_char(createdAt, ...US) returns: wall-clock text with microseconds. */
+const stored = (row: Settlement) => row.createdAt.toISOString().replace('Z', '000');
+
 /** Applies the keyset predicate and the filters the way the SQL does. */
 function build(rows: Settlement[]) {
   const calls: Array<{ sql: string; params: Record<string, any> }> = [];
@@ -38,6 +41,7 @@ function build(rows: Settlement[]) {
       let limit = Infinity;
       const params: Record<string, any> = {};
       const qb: any = {
+        addSelect: () => qb,
         orderBy: () => qb,
         addOrderBy: () => qb,
         limit: (n: number) => {
@@ -49,13 +53,13 @@ function build(rows: Settlement[]) {
           Object.assign(params, p);
           return qb;
         },
-        getMany: async () =>
-          rows
+        getRawAndEntities: async () => {
+          const entities = rows
             .filter((r) => {
               const t = r.createdAt.getTime();
               if (params.cursorAt) {
-                const c = params.cursorAt.getTime();
-                if (!(t > c || (t === c && r.id > params.cursorId))) return false;
+                const c = params.cursorAt;
+                if (!(stored(r) > c || (stored(r) === c && r.id > params.cursorId))) return false;
               }
               if (params.escrowId && r.escrowId !== params.escrowId) return false;
               if (params.status && r.status !== params.status) return false;
@@ -64,7 +68,9 @@ function build(rows: Settlement[]) {
               return true;
             })
             .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1))
-            .slice(0, limit),
+            .slice(0, limit);
+          return { entities, raw: entities.map((r) => ({ cursor_timestamp: stored(r) })) };
+        },
       };
       return qb;
     },
@@ -145,6 +151,18 @@ describe('SettlementExportService', () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  it('pages on the bare (createdAt, id) pair so the composite index can serve it', async () => {
+    const { service, calls } = build(Array.from({ length: 3 }, (_, i) => settlement(i + 1)));
+
+    const first = await service.exportPage({ limit: 1 });
+    await service.exportPage({ limit: 1, cursor: first.nextCursor! });
+
+    expect(calls[0].sql).toBe(
+      '(settlement.createdAt, settlement.id) > (CAST(:cursorAt AS timestamp), CAST(:cursorId AS uuid))',
+    );
+    expect(calls[0].params).toEqual({ cursorAt: '2026-06-01T12:00:00.000000', cursorId: uuid(1) });
+  });
+
   it('reports no next page when the last page is exactly full', async () => {
     const { service } = build([settlement(1), settlement(2)]);
     expect((await service.exportPage({ limit: 2 })).nextCursor).toBeNull();
@@ -178,15 +196,19 @@ describe('SettlementExportService', () => {
 
   it('rejects a cursor it did not issue', async () => {
     const { service } = build([]);
-    const forged = Buffer.from(JSON.stringify({ t: 'yesterday', id: 'x' })).toString('base64url');
+    const forged = Buffer.from(JSON.stringify({ t: 'yesterday', id: uuid(1) })).toString('base64url');
+    const injected = Buffer.from(
+      JSON.stringify({ t: "2026-06-01T12:00:00.000000'; DROP TABLE settlements; --", id: uuid(1) }),
+    ).toString('base64url');
 
     await expect(service.exportPage({ cursor: 'not-base64-json' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.exportPage({ cursor: forged })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.exportPage({ cursor: injected })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('round-trips a cursor', () => {
-    const row = settlement(7);
-    expect(decodeCursor(encodeCursor(row))).toEqual({ createdAt: row.createdAt, id: row.id });
+    const cursor = { createdAt: '2026-06-01T12:00:00.123456', id: uuid(7) };
+    expect(decodeCursor(encodeCursor(cursor))).toEqual(cursor);
   });
 });
 

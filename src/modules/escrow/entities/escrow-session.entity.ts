@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum EscrowStatus {
@@ -15,6 +16,10 @@ export enum EscrowStatus {
 }
 
 @Entity('escrow_sessions')
+// Open sessions oldest first: expiry sweep, reconciliation, status gauges.
+@Index('IDX_escrow_status_created', ['status', 'createdAt'])
+// Refund sweep: expired or cancelled sessions still waiting for their refund.
+@Index('IDX_escrow_awaiting_refund', ['status', 'closedAt'], { where: '"refundedAt" IS NULL' })
 export class EscrowSession {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
