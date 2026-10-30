@@ -1,10 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
 import { RawFeePolicy } from '../../config/fees.config';
 import { assertValidPolicy, computeFee, FeeBound, FeePolicy } from './fee-policy';
+import { Amount } from '../../common/money/amount';
 
-const AMOUNT_DECIMALS = 18;
 const AMOUNT_PATTERN = /^\d{1,18}(\.\d{1,18})?$/;
 
 export interface FeeQuote {
@@ -74,12 +73,12 @@ export class FeePolicyService {
     if (!AMOUNT_PATTERN.test(amount)) {
       throw new BadRequestException('amount must be a non-negative decimal with up to 18 decimals');
     }
-    const breakdown = computeFee(ethers.parseUnits(amount, AMOUNT_DECIMALS), this.policyFor(chainId));
+    const breakdown = computeFee(Amount.from(amount).wei, this.policyFor(chainId));
     return {
       chainId,
-      amount: ethers.formatUnits(breakdown.amount, AMOUNT_DECIMALS),
-      fee: ethers.formatUnits(breakdown.fee, AMOUNT_DECIMALS),
-      net: ethers.formatUnits(breakdown.net, AMOUNT_DECIMALS),
+      amount: Amount.fromWei(breakdown.amount).toString(),
+      fee: Amount.fromWei(breakdown.fee).toString(),
+      net: Amount.fromWei(breakdown.net).toString(),
       bps: breakdown.bps,
       bound: breakdown.bound,
     };
@@ -89,8 +88,8 @@ export class FeePolicyService {
     const view = (chainId: number | 'default', policy: FeePolicy): FeePolicyView => ({
       chainId,
       bps: policy.bps,
-      minFee: ethers.formatUnits(policy.minFee, AMOUNT_DECIMALS),
-      maxFee: policy.maxFee === null ? null : ethers.formatUnits(policy.maxFee, AMOUNT_DECIMALS),
+      minFee: Amount.fromWei(policy.minFee).toString(),
+      maxFee: policy.maxFee === null ? null : Amount.fromWei(policy.maxFee).toString(),
     });
     return [
       view('default', this.defaultPolicy),
@@ -106,7 +105,7 @@ export class FeePolicyService {
       if (!AMOUNT_PATTERN.test(String(value))) {
         throw new Error(`${label}: ${field} must be a decimal string, got "${value}"`);
       }
-      return ethers.parseUnits(String(value), AMOUNT_DECIMALS);
+      return Amount.from(value).wei;
     };
     const policy: FeePolicy = {
       bps: raw.bps ?? fallback?.bps ?? 0,

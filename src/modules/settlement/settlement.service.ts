@@ -6,6 +6,7 @@ import { ethers } from 'ethers';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
+import { Amount } from '../../common/money/amount';
 import { FeePolicyService } from '../fees/fee-policy.service';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { WebhookEvent } from '../webhooks/webhook-events';
@@ -240,7 +241,7 @@ export class SettlementService {
     const contract = this.blockchainService.getContract(this.escrowHubAddress, ESCROW_HUB_ABI);
     const escrowIdHash = ethers.keccak256(ethers.toUtf8Bytes(settlement.escrowId));
     const receiptsHashBytes = ethers.keccak256(ethers.toUtf8Bytes(settlement.receiptsHash));
-    const amountWei = ethers.parseEther(settlement.totalAmount);
+    const amountWei = Amount.from(settlement.totalAmount).wei;
     const tx = await contract.settleBatch(escrowIdHash, receiptsHashBytes, amountWei);
     // Persist the hash before waiting: if the wait fails, the retry can tell a
     // mined transaction from a lost one instead of paying twice.

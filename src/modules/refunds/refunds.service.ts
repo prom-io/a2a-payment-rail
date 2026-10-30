@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ethers } from 'ethers';
 import { Repository } from 'typeorm';
+import { Amount } from '../../common/money/amount';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { EscrowSession, EscrowStatus } from '../escrow/entities/escrow-session.entity';
@@ -20,7 +21,6 @@ import { WebhookEvent } from '../webhooks/webhook-events';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EscrowRefund, RefundReason, RefundStatus } from './entities/escrow-refund.entity';
 
-const AMOUNT_DECIMALS = 18;
 const PG_UNIQUE_VIOLATION = '23505';
 const MAX_ERROR_LENGTH = 500;
 
@@ -135,20 +135,20 @@ export class RefundsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async create(session: EscrowSession, reason: RefundReason): Promise<EscrowRefund> {
-    const deposit = toWei(session.depositAmount);
+    const deposit = Amount.from(session.depositAmount).wei;
     const spent =
-      (await this.spent(session.id)) + toWei(session.releasedAmount ?? '0');
+      (await this.spent(session.id)) + Amount.from(session.releasedAmount ?? '0').wei;
     if (spent > deposit) {
-      this.logger.warn(`Escrow ${session.id} spent ${fromWei(spent)} of a ${fromWei(deposit)} deposit`);
+      this.logger.warn(`Escrow ${session.id} spent ${Amount.fromWei(spent).toString()} of a ${Amount.fromWei(deposit).toString()} deposit`);
     }
     try {
       return await this.refunds.save(
         this.refunds.create({
           escrowId: session.id,
           reason,
-          depositAmount: fromWei(deposit),
-          spentAmount: fromWei(spent),
-          refundAmount: fromWei(spent > deposit ? 0n : deposit - spent),
+          depositAmount: Amount.fromWei(deposit).toString(),
+          spentAmount: Amount.fromWei(spent).toString(),
+          refundAmount: Amount.fromWei(spent > deposit ? 0n : deposit - spent).toString(),
           status: RefundStatus.PENDING,
         }),
       );
@@ -210,14 +210,6 @@ export class RefundsService implements OnModuleInit, OnModuleDestroy {
       .select('COALESCE(SUM(claim.usageDelta), 0)', 'total')
       .where('claim.escrowId = :escrowId', { escrowId })
       .getRawOne<{ total: string }>();
-    return toWei(settled?.total ?? '0') + toWei(claimed?.total ?? '0');
+    return Amount.from(settled?.total ?? '0').wei + Amount.from(claimed?.total ?? '0').wei;
   }
-}
-
-function toWei(amount: string): bigint {
-  return ethers.parseUnits(String(amount), AMOUNT_DECIMALS);
-}
-
-function fromWei(amount: bigint): string {
-  return ethers.formatUnits(amount, AMOUNT_DECIMALS);
 }

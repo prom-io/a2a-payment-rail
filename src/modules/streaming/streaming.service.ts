@@ -6,6 +6,7 @@ import { ClaimStreamDto } from './dto/claim-stream.dto';
 import { RefundResult } from './dto/refund-stream.dto';
 import { EscrowService } from '../escrow/escrow.service';
 import { EscrowStatus } from '../escrow/entities/escrow-session.entity';
+import { Amount } from '../../common/money/amount';
 
 @Injectable()
 export class StreamingService {
@@ -23,14 +24,13 @@ export class StreamingService {
       order: { claimedAt: 'DESC' },
     });
 
-    const previousCumulative = lastClaim
-      ? parseFloat(lastClaim.cumulativeAmount)
-      : 0;
+    const usageDelta = Amount.from(dto.usageDelta);
+    const previousCumulative = lastClaim ? Amount.from(lastClaim.cumulativeAmount) : Amount.ZERO;
 
     const claim = this.claimRepo.create({
       escrowId: dto.escrowId,
-      usageDelta: dto.usageDelta.toString(),
-      cumulativeAmount: (previousCumulative + dto.usageDelta).toString(),
+      usageDelta: usageDelta.toPlain(),
+      cumulativeAmount: previousCumulative.plus(usageDelta).toPlain(),
     });
     return this.claimRepo.save(claim);
   }
@@ -52,33 +52,31 @@ export class StreamingService {
     }
 
     const claims = await this.findByEscrowId(escrowId);
-    const totalClaimed = claims.reduce(
-      (acc, c) => acc + Number(c.usageDelta),
-      0,
-    );
-    const totalDeposited = Number(session.depositAmount);
+    const totalClaimed = Amount.sum(claims.map((c) => c.usageDelta));
+    const totalDeposited = Amount.from(session.depositAmount);
 
-    if (totalClaimed > totalDeposited) {
+    if (totalClaimed.gt(totalDeposited)) {
       this.logger.warn(
-        `Refund requested but claims (${totalClaimed}) exceed deposit (${totalDeposited}) for escrow ${escrowId}`,
+        `Refund requested but claims (${totalClaimed.toPlain()}) exceed deposit (${totalDeposited.toPlain()}) for escrow ${escrowId}`,
       );
     }
 
-    const refundAmount = Math.max(totalDeposited - totalClaimed, 0);
+    const refundAmount = totalDeposited.minusFloored(totalClaimed);
 
     await this.escrowService.emergencyClose(escrowId);
 
     const result: RefundResult = {
       escrowId,
-      totalDeposited: totalDeposited.toString(),
-      totalClaimed: totalClaimed.toString(),
-      refundAmount: refundAmount.toString(),
+      // toPlain keeps the shape these fields always had ("1", "0.5"), now without float noise
+      totalDeposited: totalDeposited.toPlain(),
+      totalClaimed: totalClaimed.toPlain(),
+      refundAmount: refundAmount.toPlain(),
       refundedAt: new Date().toISOString(),
       reason,
     };
 
     this.logger.log(
-      `Refund issued for escrow ${escrowId}: ${refundAmount} (claimed ${totalClaimed} of ${totalDeposited})${reason ? `, reason: ${reason}` : ''}`,
+      `Refund issued for escrow ${escrowId}: ${refundAmount.toPlain()} (claimed ${totalClaimed.toPlain()} of ${totalDeposited.toPlain()})${reason ? `, reason: ${reason}` : ''}`,
     );
 
     return result;

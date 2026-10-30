@@ -1,12 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ethers } from 'ethers';
 import { EntityManager, Repository } from 'typeorm';
 import { WithdrawFeesDto } from './dto/withdraw-fees.dto';
 import { FeeLedgerEntry, FeeLedgerEntryType } from './entities/fee-ledger-entry.entity';
 import { FeePolicyService } from './fee-policy.service';
+import { Amount } from '../../common/money/amount';
 
-const AMOUNT_DECIMALS = 18;
 const PG_UNIQUE_VIOLATION = '23505';
 // First key of the two-int advisory lock; the second one is the chain id.
 const WITHDRAWAL_LOCK_NAMESPACE = 7001;
@@ -47,7 +46,7 @@ export class FeeLedgerService {
     settlement: { id: string; feeAmount: string | null },
     chainId: number = this.feePolicyService.chainId,
   ): Promise<FeeLedgerEntry | null> {
-    if (!settlement.feeAmount || toWei(settlement.feeAmount) === 0n) return null;
+    if (!settlement.feeAmount || Amount.from(settlement.feeAmount).wei === 0n) return null;
     try {
       return await this.entries.save(
         this.entries.create({
@@ -77,7 +76,7 @@ export class FeeLedgerService {
 
   async withdraw(dto: WithdrawFeesDto): Promise<{ entry: FeeLedgerEntry; balance: FeeBalance }> {
     const chainId = dto.chainId ?? this.feePolicyService.chainId;
-    const amount = toWei(dto.amount);
+    const amount = Amount.from(dto.amount).wei;
     if (amount <= 0n) throw new BadRequestException('amount must be greater than zero');
 
     return this.entries.manager.transaction(async (manager) => {
@@ -93,7 +92,7 @@ export class FeeLedgerService {
       if (amount > available) {
         throw new ConflictException(
           `Insufficient accrued fees on chain ${chainId}: requested ${dto.amount}, ` +
-            `available ${fromWei(available)}`,
+            `available ${Amount.fromWei(available).toString()}`,
         );
       }
 
@@ -101,7 +100,7 @@ export class FeeLedgerService {
         manager.create(FeeLedgerEntry, {
           chainId: String(chainId),
           type: FeeLedgerEntryType.WITHDRAWAL,
-          amount: fromWei(amount),
+          amount: Amount.fromWei(amount).toString(),
           recipient: dto.recipient.toLowerCase(),
           txHash: dto.txHash ?? null,
           note: dto.note ?? null,
@@ -127,7 +126,7 @@ export class FeeLedgerService {
       .getRawMany<{ type: FeeLedgerEntryType; total: string }>();
 
     const totalOf = (type: FeeLedgerEntryType): bigint =>
-      toWei(rows.find((row) => row.type === type)?.total ?? '0');
+      Amount.from(rows.find((row) => row.type === type)?.total ?? '0').wei;
     return {
       accrued: totalOf(FeeLedgerEntryType.ACCRUAL),
       withdrawn: totalOf(FeeLedgerEntryType.WITHDRAWAL),
@@ -138,16 +137,8 @@ export class FeeLedgerService {
 function toBalance(chainId: number, totals: Totals): FeeBalance {
   return {
     chainId,
-    accrued: fromWei(totals.accrued),
-    withdrawn: fromWei(totals.withdrawn),
-    available: fromWei(totals.accrued - totals.withdrawn),
+    accrued: Amount.fromWei(totals.accrued).toString(),
+    withdrawn: Amount.fromWei(totals.withdrawn).toString(),
+    available: Amount.fromWei(totals.accrued - totals.withdrawn).toString(),
   };
-}
-
-function toWei(amount: string): bigint {
-  return ethers.parseUnits(String(amount), AMOUNT_DECIMALS);
-}
-
-function fromWei(amount: bigint): string {
-  return ethers.formatUnits(amount, AMOUNT_DECIMALS);
 }

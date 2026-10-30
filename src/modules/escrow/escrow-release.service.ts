@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ethers } from 'ethers';
 import { Repository } from 'typeorm';
+import { Amount } from '../../common/money/amount';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { WebhookEvent } from '../webhooks/webhook-events';
@@ -18,7 +19,6 @@ import { EscrowRelease, ReleaseStatus } from './entities/escrow-release.entity';
 import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
 import { EscrowService } from './escrow.service';
 
-const AMOUNT_DECIMALS = 18;
 const MAX_ERROR_LENGTH = 500;
 
 export interface EscrowBalance {
@@ -70,7 +70,7 @@ export class EscrowReleaseService {
     escrowId: string,
     dto: ReleaseEscrowDto,
   ): Promise<{ release: EscrowRelease; balance: EscrowBalance }> {
-    const amount = ethers.parseUnits(dto.amount, AMOUNT_DECIMALS);
+    const amount = Amount.from(dto.amount).wei;
     if (amount <= 0n) throw new BadRequestException('amount must be greater than zero');
 
     if (!(await this.reserve(escrowId, dto.amount))) {
@@ -156,17 +156,15 @@ export class EscrowReleaseService {
 }
 
 export function toBalance(session: EscrowSession): EscrowBalance {
-  const deposit = ethers.parseUnits(String(session.depositAmount), AMOUNT_DECIMALS);
-  const budget = ethers.parseUnits(String(session.budgetLimit), AMOUNT_DECIMALS);
-  const released = ethers.parseUnits(String(session.releasedAmount ?? '0'), AMOUNT_DECIMALS);
-  const ceiling = deposit < budget ? deposit : budget;
-  const remaining = ceiling > released ? ceiling - released : 0n;
+  const deposit = Amount.from(session.depositAmount);
+  const budget = Amount.from(session.budgetLimit);
+  const released = Amount.from(session.releasedAmount ?? '0');
   return {
     escrowId: session.id,
     status: session.status,
-    depositAmount: ethers.formatUnits(deposit, AMOUNT_DECIMALS),
-    budgetLimit: ethers.formatUnits(budget, AMOUNT_DECIMALS),
-    releasedAmount: ethers.formatUnits(released, AMOUNT_DECIMALS),
-    remainingBalance: ethers.formatUnits(remaining, AMOUNT_DECIMALS),
+    depositAmount: deposit.toString(),
+    budgetLimit: budget.toString(),
+    releasedAmount: released.toString(),
+    remainingBalance: Amount.min(deposit, budget).minusFloored(released).toString(),
   };
 }

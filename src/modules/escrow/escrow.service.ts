@@ -7,6 +7,7 @@ import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
 import { OpenEscrowDto } from './dto/open-escrow.dto';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
+import { Amount } from '../../common/money/amount';
 import { WebhookEvent } from '../webhooks/webhook-events';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { SpendingLimitService } from './spending-limit.service';
@@ -52,8 +53,8 @@ export class EscrowService {
     if (this.escrowHubAddress) {
       try {
         const contract = this.blockchainService.getContract(this.escrowHubAddress, ESCROW_HUB_ABI);
-        const depositWei = ethers.parseEther(dto.depositAmount.toString());
-        const budgetWei = ethers.parseEther(dto.budgetLimit.toString());
+        const depositWei = Amount.from(dto.depositAmount).wei;
+        const budgetWei = Amount.from(dto.budgetLimit).wei;
         const tx = await contract.openEscrow(
           escrowIdHash,
           dto.agentB,

@@ -163,7 +163,7 @@ The deploy script writes contract addresses to stdout — copy `EscrowHub` addre
 ## 9. Conventions specific to this repo
 
 - **Ethereum addresses** — always passed through `ParseEthereumAddressPipe` (lowercased, regex-validated) before reaching the service layer.
-- **Money amounts** — passed and stored as **decimal strings** (`"1000000000000000000"` = 1 ETH in wei). Never use JS `number` for money.
+- **Money amounts** — passed and stored as **decimal strings** (`"1000000000000000000"` = 1 ETH in wei). Never use JS `number` for money. All arithmetic goes through the `Amount` value object (`src/common/money/amount.ts`): `Amount.from("1.5")` parses (and throws rather than round), `plus` / `minusFloored` / `mulDiv` / `gt` compute on `bigint` wei, `toString()` is the API form (`"1.5"`, `"2.0"`), `toFixed()` the 18-decimal column form and `.wei` what goes to the contract. Do not call `ethers.parseUnits`, `parseFloat` or `Number()` on an amount.
 - **Session IDs** — UUID v4. Validate with `@IsUUID('4')` in DTOs.
 - **Hashes** — 0x-prefixed 32-byte hex (`/^0x[0-9a-fA-F]{64}$/`).
 - **Logging** — use the injected `Logger` with the class name as the context. Don't `console.log`.

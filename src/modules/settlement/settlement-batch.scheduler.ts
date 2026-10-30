@@ -1,10 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
 import { calldataGas, packReceiptsCompact } from './batch-calldata.util';
 import { SettlementService } from './settlement.service';
+import { Amount } from '../../common/money/amount';
 
 export interface BatchRunResult {
   /** False when the previous run was still in flight and this one was skipped. */
@@ -14,8 +14,6 @@ export interface BatchRunResult {
   receipts: number;
   failed: number;
 }
-
-const AMOUNT_DECIMALS = 18;
 
 /**
  * Groups unsettled receipts per escrow and settles them in batches.
@@ -117,20 +115,20 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
   }
 
   private async settleChunk(escrowId: string, chunk: PaymentReceipt[]): Promise<void> {
-    const amounts = chunk.map((receipt) => ethers.parseUnits(receipt.amount, AMOUNT_DECIMALS));
-    const total = amounts.reduce((sum, amount) => sum + amount, 0n);
+    const amounts = chunk.map((receipt) => Amount.from(receipt.amount));
+    const total = Amount.sum(amounts);
     const packed = packReceiptsCompact(
       chunk.map((receipt, i) => ({
         receiptHash: receipt.receiptHash,
         payer: receipt.fromAgent,
         payee: receipt.toAgent,
-        amountMinor: amounts[i],
+        amountMinor: amounts[i].wei,
       })),
     );
     const settlement = await this.settlementService.settleBatch({
       escrowId,
       receiptsHash: packed.root,
-      totalAmount: ethers.formatUnits(total, AMOUNT_DECIMALS),
+      totalAmount: total.toString(),
       receiptCount: chunk.length,
       packedReceipts: packed.blob,
     });

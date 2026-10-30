@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ethers } from 'ethers';
 import { Gauge } from 'prom-client';
 import { In, Repository } from 'typeorm';
+import { Amount } from '../../common/money/amount';
 import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { EscrowSession, EscrowStatus } from '../escrow/entities/escrow-session.entity';
@@ -15,7 +16,6 @@ import {
   ReconciliationStatus,
 } from './entities/reconciliation-run.entity';
 
-const AMOUNT_DECIMALS = 18;
 const MAX_STORED_MISMATCHES = 100;
 
 /**
@@ -139,13 +139,13 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
     let locked = 0n;
 
     for (const session of open) {
-      const deposit = toWei(session.depositAmount);
-      const spent = (settled.get(session.id) ?? 0n) + toWei(session.releasedAmount ?? '0');
+      const deposit = Amount.from(session.depositAmount).wei;
+      const spent = (settled.get(session.id) ?? 0n) + Amount.from(session.releasedAmount ?? '0').wei;
       locked += deposit > spent ? deposit - spent : 0n;
 
       const onChain = await contract.escrows(ethers.keccak256(ethers.toUtf8Bytes(session.id)));
       const report = (kind: ReconciliationMismatch['kind'], ledger: bigint, chain: bigint) =>
-        mismatches.push({ escrowId: session.id, kind, ledger: fromWei(ledger), onChain: fromWei(chain) });
+        mismatches.push({ escrowId: session.id, kind, ledger: Amount.fromWei(ledger).toString(), onChain: Amount.fromWei(chain).toString() });
 
       if (BigInt(onChain.createdAt) === 0n) {
         report('missing_on_chain', deposit, 0n);
@@ -156,17 +156,17 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
       if (BigInt(onChain.spent) !== spent) report('spent_mismatch', spent, BigInt(onChain.spent));
     }
     run.checked = open.length;
-    run.ledgerLocked = fromWei(locked);
+    run.ledgerLocked = Amount.fromWei(locked).toString();
 
     const balance = await this.blockchainService.getProvider().getBalance(this.escrowHubAddress);
-    run.onChainBalance = fromWei(balance);
+    run.onChainBalance = Amount.fromWei(balance).toString();
     // Only meaningful when no open session was left out of the sum.
     if (totalOpen <= open.length && balance < locked) {
       mismatches.push({
         escrowId: null,
         kind: 'hub_balance_shortfall',
-        ledger: fromWei(locked),
-        onChain: fromWei(balance),
+        ledger: Amount.fromWei(locked).toString(),
+        onChain: Amount.fromWei(balance).toString(),
       });
     }
     return mismatches;
@@ -180,7 +180,7 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
       select: { escrowId: true, totalAmount: true },
     });
     for (const row of rows) {
-      totals.set(row.escrowId, (totals.get(row.escrowId) ?? 0n) + toWei(row.totalAmount));
+      totals.set(row.escrowId, (totals.get(row.escrowId) ?? 0n) + Amount.from(row.totalAmount).wei);
     }
     return totals;
   }
@@ -209,12 +209,4 @@ export class ReconciliationService implements OnModuleInit, OnModuleDestroy {
     }
     return saved;
   }
-}
-
-function toWei(amount: string): bigint {
-  return ethers.parseUnits(String(amount), AMOUNT_DECIMALS);
-}
-
-function fromWei(amount: bigint): string {
-  return ethers.formatUnits(amount, AMOUNT_DECIMALS);
 }
