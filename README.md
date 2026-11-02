@@ -70,6 +70,19 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 | Webhooks | `/webhooks` | Subscriptions to escrow and settlement events |
 | Health | `/health` | Service health check |
 
+## Documentation
+
+| Document | Covers |
+|---|---|
+| [ONBOARDING.md](ONBOARDING.md) | Layout, conventions, local development |
+| [docs/SETTLEMENT-PROTOCOL.md](docs/SETTLEMENT-PROTOCOL.md) | Receipt formats, batching, retries, fees, refunds, export |
+| [docs/ADVANCED.md](docs/ADVANCED.md) | Multi-chain, streaming v2 and batching: design and current limits |
+| [docs/WEBHOOKS.md](docs/WEBHOOKS.md) | Events, signatures, redelivery |
+| [docs/DATABASE.md](docs/DATABASE.md) | Schema handling and indexes |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Tracing, metrics, reconciliation, alerts |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model and controls |
+| [docs/CI-CD.md](docs/CI-CD.md) | Pipelines, secrets, rollback |
+
 ## Docker
 
 ```bash
