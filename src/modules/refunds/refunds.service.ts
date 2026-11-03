@@ -173,7 +173,7 @@ export class RefundsService implements OnModuleInit, OnModuleDestroy {
           ethers.keccak256(ethers.toUtf8Bytes(refund.escrowId)),
         );
         refund.txHash = tx.hash;
-        await tx.wait();
+        await this.blockchainService.waitFor(tx);
       }
       refund.status = RefundStatus.COMPLETED;
       refund.completedAt = new Date();

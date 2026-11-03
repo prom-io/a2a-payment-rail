@@ -232,12 +232,17 @@ export class SettlementService {
     if (!settlement.txHash) return undefined;
     const provider = this.blockchainService.getProvider();
     const receipt = await provider.getTransactionReceipt(settlement.txHash);
-    if (receipt?.status === 1) return settlement.txHash;
+    if (receipt?.status === 1) {
+      // Mined is not final: below the profile's confirmation depth keep waiting.
+      const depth = await receipt.confirmations();
+      return depth >= this.blockchainService.confirmations ? settlement.txHash : null;
+    }
     if (receipt) return undefined; // mined and reverted: safe to send again
     return (await provider.getTransaction(settlement.txHash)) ? null : undefined;
   }
 
   private async send(settlement: Settlement): Promise<string> {
+    await this.blockchainService.assertGasWithinCap();
     const contract = this.blockchainService.getContract(this.escrowHubAddress, ESCROW_HUB_ABI);
     const escrowIdHash = ethers.keccak256(ethers.toUtf8Bytes(settlement.escrowId));
     const receiptsHashBytes = ethers.keccak256(ethers.toUtf8Bytes(settlement.receiptsHash));
@@ -247,7 +252,7 @@ export class SettlementService {
     // mined transaction from a lost one instead of paying twice.
     settlement.txHash = tx.hash;
     await this.settlementRepo.save(settlement);
-    const receipt = await tx.wait();
+    const receipt = await this.blockchainService.waitFor(tx);
     return receipt.hash;
   }
 }

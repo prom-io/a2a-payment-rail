@@ -35,6 +35,9 @@ function build(config: Record<string, unknown> = {}) {
   const blockchain = {
     getContract: jest.fn().mockReturnValue({ settleBatch }),
     getProvider: jest.fn().mockReturnValue(provider),
+    waitFor: jest.fn((tx: { wait: () => Promise<unknown> }) => tx.wait()),
+    assertGasWithinCap: jest.fn().mockResolvedValue(undefined),
+    confirmations: 3,
   };
   const webhooks = { emit: jest.fn().mockResolvedValue(undefined) };
   const feeLedger = { accrue: jest.fn().mockResolvedValue(null) };
@@ -54,7 +57,7 @@ function build(config: Record<string, unknown> = {}) {
     webhooks as unknown as WebhooksService,
   );
   const mined = (hash = '0xtx') => ({ hash, wait: jest.fn().mockResolvedValue({ hash }) });
-  return { service, repo, settleBatch, provider, mined, feeLedger, webhooks, retry: new SettlementRetryService(service, config$) };
+  return { service, repo, settleBatch, provider, mined, feeLedger, webhooks, blockchain, retry: new SettlementRetryService(service, config$) };
 }
 
 const input = { escrowId: ESCROW, receiptsHash: HASH, totalAmount: '1.5' };
@@ -173,12 +176,37 @@ describe('settlement retry queue', () => {
     const { service, settleBatch, provider } = build();
     settleBatch.mockResolvedValue({ hash: '0xlost', wait: jest.fn().mockRejectedValue(chainError('TIMEOUT')) });
     const settlement = await service.settleBatch(input);
-    provider.getTransactionReceipt.mockResolvedValue({ status: 1 });
+    provider.getTransactionReceipt.mockResolvedValue({ status: 1, confirmations: async () => 3 });
 
     await service.attempt(settlement, NOW);
 
     expect(settleBatch).toHaveBeenCalledTimes(1);
     expect(settlement).toMatchObject({ status: SettlementStatus.SETTLED, txHash: '0xlost' });
+  });
+
+  it('keeps waiting for a mined transaction that is not buried deep enough yet', async () => {
+    const { service, settleBatch, provider } = build();
+    settleBatch.mockResolvedValue({ hash: '0xlost', wait: jest.fn().mockRejectedValue(chainError('TIMEOUT')) });
+    const settlement = await service.settleBatch(input);
+    provider.getTransactionReceipt.mockResolvedValue({ status: 1, confirmations: async () => 2 });
+
+    await service.attempt(settlement, NOW);
+
+    expect(settleBatch).toHaveBeenCalledTimes(1);
+    expect(settlement).toMatchObject({ status: SettlementStatus.RETRYING, attempts: 1 });
+  });
+
+  it('does not send while the network fee is above the cap, and retries later', async () => {
+    const { service, settleBatch, blockchain, mined } = build();
+    blockchain.assertGasWithinCap.mockRejectedValueOnce(chainError('GAS_PRICE_ABOVE_CAP', 'fee above cap'));
+
+    const settlement = await service.settleBatch(input);
+    expect(settleBatch).not.toHaveBeenCalled();
+    expect(settlement).toMatchObject({ status: SettlementStatus.RETRYING, lastError: 'fee above cap' });
+
+    settleBatch.mockResolvedValue(mined());
+    await service.attempt(settlement, NOW);
+    expect(settlement.status).toBe(SettlementStatus.SETTLED);
   });
 
   it('replays a dead-lettered settlement with a fresh set of attempts', async () => {

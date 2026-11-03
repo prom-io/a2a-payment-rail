@@ -150,7 +150,7 @@ export class EscrowReleaseService {
       ethers.keccak256(ethers.toUtf8Bytes(release.id)),
       amount,
     );
-    const receipt = await tx.wait();
+    const receipt = await this.blockchainService.waitFor(tx);
     return receipt.hash;
   }
 }

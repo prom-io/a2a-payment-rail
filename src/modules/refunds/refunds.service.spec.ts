@@ -57,7 +57,10 @@ function build(options: {
     sumRepo(options.settled ?? '0') as unknown as Repository<Settlement>,
     sumRepo(options.claimed ?? '0') as unknown as Repository<StreamClaim>,
     escrow as unknown as EscrowService,
-    { getContract: jest.fn().mockReturnValue({ emergencyClose }) } as unknown as BlockchainService,
+    {
+      getContract: jest.fn().mockReturnValue({ emergencyClose }),
+      waitFor: jest.fn((tx: { wait: () => Promise<unknown> }) => tx.wait()),
+    } as unknown as BlockchainService,
     webhooks as unknown as WebhooksService,
     configStub({ ESCROW_HUB_ADDRESS: options.hub ?? '' }),
   );

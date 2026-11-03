@@ -90,7 +90,8 @@ Copy `.env.example` to `.env` and adjust as needed. Key groups:
 | Group | Variables | Notes |
 |---|---|---|
 | Database | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | for local dev: defaults work with `docker-compose.dev.yml` |
-| Blockchain | `RPC_URL`, `PRIVATE_KEY`, `ESCROW_HUB_ADDRESS` | local dev: anvil RPC + first anvil dev key |
+| Blockchain | `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_PRIVATE_KEY`, `ESCROW_HUB_ADDRESS`, `CHAIN_ID` | local dev: anvil RPC + first anvil dev key; an empty hub address runs without a contract |
+| Network profile | `NETWORK_PROFILE` (`local`, `testnet`, `mainnet`), optional `TX_CONFIRMATIONS`, `TX_CONFIRMATION_TIMEOUT_MS`, `MAX_FEE_PER_GAS_GWEI`, `MAX_PRIORITY_FEE_PER_GAS_GWEI` | finality depth and fee caps per network (`src/config/network.config.ts`); mainnet: 12 confirmations, 10 min timeout, 50 gwei cap. Template: `.env.mainnet.example` |
 | API | `PORT` (default 3003), `CORS_ORIGINS` | comma-separated list |
 | JWT | `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN` | generate a strong secret for non-dev |
 | Throttler | `THROTTLE_SHORT_TTL`, `THROTTLE_SHORT_LIMIT`, `THROTTLE_LONG_TTL`, `THROTTLE_LONG_LIMIT` | dual-tier rate limiting |

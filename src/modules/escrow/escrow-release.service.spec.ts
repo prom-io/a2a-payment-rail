@@ -61,7 +61,10 @@ function build(options: { status?: EscrowStatus; deposit?: string; budget?: stri
     sessions as unknown as Repository<EscrowSession>,
     releases as unknown as Repository<EscrowRelease>,
     { findById: jest.fn().mockResolvedValue(session) } as unknown as EscrowService,
-    { getContract: jest.fn().mockReturnValue({ settleBatch }) } as unknown as BlockchainService,
+    {
+      getContract: jest.fn().mockReturnValue({ settleBatch }),
+      waitFor: jest.fn((tx: { wait: () => Promise<unknown> }) => tx.wait()),
+    } as unknown as BlockchainService,
     webhooks as unknown as WebhooksService,
     configStub({ ESCROW_HUB_ADDRESS: options.hub ?? '' }),
   );

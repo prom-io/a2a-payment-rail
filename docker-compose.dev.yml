@@ -18,7 +18,7 @@ services:
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
       - DATABASE_NAME=payment_db
-      - RPC_URL=http://anvil:8545
+      - BLOCKCHAIN_RPC_URL=http://anvil:8545
       - CORS_ORIGINS=http://localhost:3000
     depends_on:
       postgres:

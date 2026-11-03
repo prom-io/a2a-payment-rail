@@ -63,7 +63,7 @@ export class EscrowService {
           dto.ttl,
           { value: depositWei },
         );
-        const receipt = await tx.wait();
+        const receipt = await this.blockchainService.waitFor(tx);
         txHash = receipt.hash;
         this.logger.log(`Escrow ${saved.id} opened on-chain, tx: ${txHash}`);
       } catch (error: any) {
@@ -101,7 +101,7 @@ export class EscrowService {
         const escrowIdHash = ethers.keccak256(ethers.toUtf8Bytes(id));
         const contract = this.blockchainService.getContract(this.escrowHubAddress, ESCROW_HUB_ABI);
         const tx = await contract.closeEscrow(escrowIdHash);
-        const receipt = await tx.wait();
+        const receipt = await this.blockchainService.waitFor(tx);
         txHash = receipt.hash;
         this.logger.log(`Escrow ${id} closed on-chain, tx: ${txHash}`);
       } catch (error: any) {

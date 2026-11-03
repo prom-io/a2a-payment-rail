@@ -50,6 +50,33 @@ give each chain its own fee policy. The provider abstraction is what a single
 multi-chain process will be built on; routing a request to a chain inside one
 process is not implemented.
 
+### Network profiles
+
+`NETWORK_PROFILE` (`src/config/network.config.ts`) sets how careful the single
+chain connection is:
+
+| profile   | confirmations | confirmation timeout | max fee | max priority fee |
+|-----------|--------------:|---------------------:|--------:|-----------------:|
+| `local`   |             1 |                 none |    none |             none |
+| `testnet` |             1 |                120 s |  5 gwei |           1 gwei |
+| `mainnet` |            12 |                600 s | 50 gwei |           2 gwei |
+
+- **Confirmations.** Every transaction the rail sends (open, close, settle,
+  release, refund) is awaited through `BlockchainService.waitFor`, which waits
+  for that many blocks. A settlement whose wait times out goes to the retry
+  queue; the retry finds the stored transaction hash and keeps waiting until
+  the transaction is buried deep enough, without sending it again.
+- **Fee cap.** Before a settlement is sent, `assertGasWithinCap` compares the
+  network's current `maxFeePerGas` with the cap. Above the cap nothing is
+  sent and the settlement is retried later with the usual backoff.
+- The chain in `CHAIN_ID` is registered in the chain registry under the
+  profile's chain name (`local`, `prom-mainnet`); the testnet entry is built in.
+
+`TX_CONFIRMATIONS`, `TX_CONFIRMATION_TIMEOUT_MS`, `MAX_FEE_PER_GAS_GWEI` and
+`MAX_PRIORITY_FEE_PER_GAS_GWEI` override single values. An unknown profile
+name stops the service at startup. `.env.mainnet.example` is the template for
+a mainnet deployment.
+
 ### Adding a chain to a deployment
 
 1. Deploy `EscrowHub` on the chain (`contracts/script/Deploy.s.sol`).
