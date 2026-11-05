@@ -14,6 +14,7 @@ import webhooksConfig from './config/webhooks.config';
 import refundsConfig from './config/refunds.config';
 import reconciliationConfig from './config/reconciliation.config';
 import networkConfig from './config/network.config';
+import { validateConfig } from './config/config-validation';
 import { BlockchainModule } from './common/blockchain/blockchain.module';
 import { AuthModule } from './common/auth/auth.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
@@ -33,6 +34,8 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Runs before any module is built; refuses unsafe mainnet settings.
+      validate: validateConfig,
       load: [
         blockchainConfig,
         securityConfig,

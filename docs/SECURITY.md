@@ -19,6 +19,37 @@ Primary threats:
 | T8 | Unlogged privileged actions | `AuditInterceptor` on every mutating request |
 | T9 | Compromised or runaway payer drains its funds into escrow | Rolling spending limit per payer (`SpendingLimitService`) |
 
+## Startup validation (mainnet)
+
+`ConfigModule` runs `validateConfig` (`src/config/config-validation.ts`)
+before any module is built. With `NETWORK_PROFILE=mainnet` the process refuses
+to start, listing every problem at once, when:
+
+| variable | refused when |
+|---|---|
+| `NODE_ENV` | not `production` |
+| `CHAIN_ID` | missing, or a development/testnet id (31337, 1337, 71234) |
+| `BLOCKCHAIN_RPC_URL` | missing, not `https`/`wss`, or a local host |
+| `BLOCKCHAIN_PRIVATE_KEY` | missing or malformed (the fallback is the anvil key), or one of the published anvil/hardhat keys |
+| `ESCROW_HUB_ADDRESS` | missing, malformed or the zero address |
+| `TX_CONFIRMATIONS` | set below 6 |
+| `MAX_FEE_PER_GAS_GWEI` | set to 0 (the fee cap cannot be disabled) |
+| `JWT_SECRET`, `CSRF_SECRET` | missing, a default from the repository, shorter than 32 characters, or equal to each other |
+| `DATABASE_PASSWORD` | missing or a default (`postgres`, ...) |
+| `DATABASE_SYNCHRONIZE` | `true` without `MAINNET_ALLOW_SCHEMA_SYNC=true` |
+| `CORS_ORIGINS` | missing, `*`, not `https`, or a local origin |
+| `HSTS_ENABLED` | `false` |
+| `WEBHOOK_ALLOW_HTTP` | `true` |
+
+The error names the variables and never prints their values. An unknown
+`NETWORK_PROFILE` is refused on every profile. The `local` and `testnet`
+profiles are not checked: the values refused here are the ones that make a
+development setup work without configuration.
+
+Schema sync follows the same idea: on mainnet `synchronize` is off unless
+`DATABASE_SYNCHRONIZE=true` and `MAINNET_ALLOW_SCHEMA_SYNC=true` are both set
+for the deploy that changes the schema; on the other profiles it stays on.
+
 ## Spending limits
 
 `POST /escrow` counts the deposit against the payer (`agentA`):
