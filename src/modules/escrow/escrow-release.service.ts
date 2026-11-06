@@ -14,6 +14,7 @@ import { ESCROW_HUB_ABI } from '../../common/blockchain/abis/escrow-hub.abi';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
 import { WebhookEvent } from '../webhooks/webhook-events';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { PauseScope, PauseService } from '../ops/pause.service';
 import { ReleaseEscrowDto } from './dto/release-escrow.dto';
 import { EscrowRelease, ReleaseStatus } from './entities/escrow-release.entity';
 import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
@@ -52,6 +53,7 @@ export class EscrowReleaseService {
     private readonly escrowService: EscrowService,
     private readonly blockchainService: BlockchainService,
     private readonly webhooksService: WebhooksService,
+    private readonly pauseService: PauseService,
     configService: ConfigService,
   ) {
     this.escrowHubAddress = configService.get<string>('ESCROW_HUB_ADDRESS', '');
@@ -70,6 +72,8 @@ export class EscrowReleaseService {
     escrowId: string,
     dto: ReleaseEscrowDto,
   ): Promise<{ release: EscrowRelease; balance: EscrowBalance }> {
+    // A release is a payout to the payee, so the settlement pause covers it.
+    this.pauseService.assertNotPaused(PauseScope.SETTLEMENT);
     const amount = Amount.from(dto.amount).wei;
     if (amount <= 0n) throw new BadRequestException('amount must be greater than zero');
 

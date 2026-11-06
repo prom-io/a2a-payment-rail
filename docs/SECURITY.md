@@ -19,6 +19,35 @@ Primary threats:
 | T8 | Unlogged privileged actions | `AuditInterceptor` on every mutating request |
 | T9 | Compromised or runaway payer drains its funds into escrow | Rolling spending limit per payer (`SpendingLimitService`) |
 
+## Emergency pause
+
+`PauseService` (`src/modules/ops/`) stops money from leaving towards payees
+without stopping the service.
+
+| scope | blocks (HTTP 503) | automatic jobs |
+|---|---|---|
+| `settlement` | `POST /settlements/batch`, `POST /settlements/:id/replay`, `POST /escrow/:id/release` | batch scheduler and retry queue do nothing; receipts and queued settlements wait |
+| `streaming` | `POST /streaming/claim` | none |
+
+Never blocked: opening, closing and cancelling an escrow, refunds, all reads.
+A pause must not trap a payer's deposit. A settlement whose transaction was
+already sent when the pause came is not recalled.
+
+- `POST /admin/pause` `{ "scope": "settlement" | "streaming" | "all", "reason": "..." }`
+  and `POST /admin/resume` `{ "scope": ... }`, role `admin`;
+  `GET /admin/pause` shows the state with reason, actor and time.
+- The switch is a row per scope in `system_flags`. It takes effect at once on
+  the instance that received the call and within `PAUSE_REFRESH_MS` (5 s) on
+  the others, and it survives restarts. If the table cannot be read the last
+  known state is kept.
+- `EMERGENCY_PAUSE=all` (or a comma-separated list of scopes) pauses from the
+  environment, for the case where the API or the admin credentials are what
+  failed. It cannot be lifted through the API, only by removing it and
+  restarting. A misspelled value stops the service at startup.
+- `GET /health` reports `paused.settlement` / `paused.streaming` and stays
+  `ok`: a paused rail must not be restarted by an orchestrator. The gauge
+  `payment_rail_paused{scope}` is `1` while a scope is paused.
+
 ## Startup validation (mainnet)
 
 `ConfigModule` runs `validateConfig` (`src/config/config-validation.ts`)

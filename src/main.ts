@@ -64,6 +64,7 @@ async function bootstrap() {
     .addTag('refunds', 'Refunds of expired and cancelled escrow sessions')
     .addTag('webhooks', 'Webhook subscriptions for escrow and settlement events')
     .addTag('health', 'Service health checks')
+    .addTag('admin', 'Operator switches: emergency pause')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

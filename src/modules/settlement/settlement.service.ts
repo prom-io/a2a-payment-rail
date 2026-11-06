@@ -11,6 +11,7 @@ import { FeePolicyService } from '../fees/fee-policy.service';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { WebhookEvent } from '../webhooks/webhook-events';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { PauseScope, PauseService } from '../ops/pause.service';
 
 /** Batch parameters; the amount is a decimal string when it comes from the scheduler. */
 export interface SettleBatchInput {
@@ -43,6 +44,7 @@ export class SettlementService {
     private readonly feePolicyService: FeePolicyService,
     private readonly feeLedgerService: FeeLedgerService,
     private readonly webhooksService: WebhooksService,
+    private readonly pauseService: PauseService,
   ) {
     this.escrowHubAddress = this.configService.get<string>('ESCROW_HUB_ADDRESS', '');
     this.maxAttempts = this.configService.get<number>('settlement.retry.maxAttempts', 5);
@@ -51,6 +53,8 @@ export class SettlementService {
   }
 
   async settleBatch(dto: SettleBatchInput): Promise<Settlement> {
+    // Checked before the row is written: a paused rail takes no new settlements.
+    this.pauseService.assertNotPaused(PauseScope.SETTLEMENT);
     const settlement = this.settlementRepo.create({
       escrowId: dto.escrowId,
       receiptsHash: dto.receiptsHash,
@@ -180,6 +184,7 @@ export class SettlementService {
     if (!this.escrowHubAddress) {
       throw new ConflictException('ESCROW_HUB_ADDRESS is not configured; nothing to replay against');
     }
+    this.pauseService.assertNotPaused(PauseScope.SETTLEMENT);
     settlement.attempts = 0;
     this.logger.warn(`Manual replay of settlement ${id} (last error: ${settlement.lastError})`);
     return this.attempt(settlement);

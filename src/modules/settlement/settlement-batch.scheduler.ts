@@ -4,6 +4,7 @@ import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
 import { calldataGas, packReceiptsCompact } from './batch-calldata.util';
 import { SettlementService } from './settlement.service';
+import { PauseScope, PauseService } from '../ops/pause.service';
 import { Amount } from '../../common/money/amount';
 
 export interface BatchRunResult {
@@ -41,6 +42,7 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly receiptsService: ReceiptsService,
     private readonly settlementService: SettlementService,
+    private readonly pauseService: PauseService,
     configService: ConfigService,
   ) {
     this.enabled = configService.get<boolean>('settlement.batch.enabled', false);
@@ -75,7 +77,8 @@ export class SettlementBatchScheduler implements OnModuleInit, OnModuleDestroy {
   async runOnce(now: Date = new Date()): Promise<BatchRunResult> {
     const result: BatchRunResult = { ran: false, scanned: 0, batches: 0, receipts: 0, failed: 0 };
     // A slow chain must not let two ticks settle the same receipts twice.
-    if (this.running) return result;
+    // Paused: receipts keep accumulating and are batched after the resume.
+    if (this.running || this.pauseService.isPaused(PauseScope.SETTLEMENT)) return result;
     this.running = true;
     try {
       result.ran = true;

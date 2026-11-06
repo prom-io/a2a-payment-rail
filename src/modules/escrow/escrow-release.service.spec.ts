@@ -1,7 +1,8 @@
 import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
-import { configStub } from '../../testing/stubs';
+import { PauseService } from '../ops/pause.service';
+import { configStub, pauseStub } from '../../testing/stubs';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EscrowRelease, ReleaseStatus } from './entities/escrow-release.entity';
 import { EscrowSession, EscrowStatus } from './entities/escrow-session.entity';
@@ -57,6 +58,7 @@ function build(options: { status?: EscrowStatus; deposit?: string; budget?: stri
   };
   const settleBatch = jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: '0xpaid' }) });
   const webhooks = { emit: jest.fn().mockResolvedValue(undefined) };
+  const pause = pauseStub();
   const service = new EscrowReleaseService(
     sessions as unknown as Repository<EscrowSession>,
     releases as unknown as Repository<EscrowRelease>,
@@ -66,9 +68,10 @@ function build(options: { status?: EscrowStatus; deposit?: string; budget?: stri
       waitFor: jest.fn((tx: { wait: () => Promise<unknown> }) => tx.wait()),
     } as unknown as BlockchainService,
     webhooks as unknown as WebhooksService,
+    pause as unknown as PauseService,
     configStub({ ESCROW_HUB_ADDRESS: options.hub ?? '' }),
   );
-  return { service, session, rows, settleBatch, webhooks };
+  return { service, session, rows, settleBatch, webhooks, pause };
 }
 
 describe('EscrowReleaseService', () => {
@@ -111,6 +114,15 @@ describe('EscrowReleaseService', () => {
       expect(rows).toHaveLength(0);
     },
   );
+
+  it('releases nothing while settlements are paused', async () => {
+    const { service, session, rows, pause } = build();
+    pause.paused = true;
+
+    await expect(service.release(ESCROW, { amount: '1' })).rejects.toMatchObject({ status: 503 });
+    expect(session.releasedAmount).toBe('0');
+    expect(rows).toHaveLength(0);
+  });
 
   it('rejects a zero amount', async () => {
     const { service } = build();

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { SettlementStatus } from './entities/settlement.entity';
 import { SettlementService } from './settlement.service';
+import { PauseScope, PauseService } from '../ops/pause.service';
 
 export interface RetryRunResult {
   ran: boolean;
@@ -29,6 +30,7 @@ export class SettlementRetryService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly settlementService: SettlementService,
+    private readonly pauseService: PauseService,
     configService: ConfigService,
   ) {
     this.enabled = configService.get<boolean>('settlement.retry.enabled', true);
@@ -53,7 +55,8 @@ export class SettlementRetryService implements OnModuleInit, OnModuleDestroy {
 
   async processDue(now: Date = new Date()): Promise<RetryRunResult> {
     const result: RetryRunResult = { ran: false, attempted: 0, settled: 0, deadLettered: 0 };
-    if (this.running) return result;
+    // While paused the queue is left exactly as it is; it drains after the resume.
+    if (this.running || this.pauseService.isPaused(PauseScope.SETTLEMENT)) return result;
     this.running = true;
     try {
       result.ran = true;

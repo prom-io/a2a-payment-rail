@@ -6,6 +6,7 @@ import { ClaimStreamDto } from './dto/claim-stream.dto';
 import { RefundResult } from './dto/refund-stream.dto';
 import { EscrowService } from '../escrow/escrow.service';
 import { EscrowStatus } from '../escrow/entities/escrow-session.entity';
+import { PauseScope, PauseService } from '../ops/pause.service';
 import { Amount } from '../../common/money/amount';
 
 @Injectable()
@@ -16,9 +17,11 @@ export class StreamingService {
     @InjectRepository(StreamClaim)
     private readonly claimRepo: Repository<StreamClaim>,
     private readonly escrowService: EscrowService,
+    private readonly pauseService: PauseService,
   ) {}
 
   async claim(dto: ClaimStreamDto): Promise<StreamClaim> {
+    this.pauseService.assertNotPaused(PauseScope.STREAMING);
     const lastClaim = await this.claimRepo.findOne({
       where: { escrowId: dto.escrowId },
       order: { claimedAt: 'DESC' },

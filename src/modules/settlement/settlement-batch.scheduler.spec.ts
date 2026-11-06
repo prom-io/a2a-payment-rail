@@ -1,4 +1,5 @@
-import { configStub } from '../../testing/stubs';
+import { PauseService } from '../ops/pause.service';
+import { configStub, pauseStub } from '../../testing/stubs';
 import { unpackReceiptsCompact } from './batch-calldata.util';
 import { PaymentReceipt } from '../receipts/entities/payment-receipt.entity';
 import { ReceiptsService } from '../receipts/receipts.service';
@@ -33,6 +34,7 @@ function build(pending: PaymentReceipt[], config: Record<string, unknown> = {}) 
     findUnsettled: jest.fn().mockResolvedValue(pending),
     markSettled: jest.fn().mockResolvedValue(undefined),
   };
+  const pause = pauseStub();
   let settlementSeq = 0;
   const settlements = {
     settleBatch: jest.fn().mockImplementation(async (input) => {
@@ -43,13 +45,14 @@ function build(pending: PaymentReceipt[], config: Record<string, unknown> = {}) 
   const scheduler = new SettlementBatchScheduler(
     receipts as unknown as ReceiptsService,
     settlements as unknown as SettlementService,
+    pause as unknown as PauseService,
     configStub({
       'settlement.batch.windowMs': 60_000,
       'settlement.batch.maxReceipts': 3,
       ...config,
     }),
   );
-  return { scheduler, receipts, settlements };
+  return { scheduler, receipts, settlements, pause };
 }
 
 describe('SettlementBatchScheduler', () => {
@@ -217,6 +220,18 @@ describe('SettlementBatchScheduler edge cases', () => {
 
     await expect(scheduler.runOnce(NOW)).rejects.toThrow('connection refused');
     expect((await scheduler.runOnce(NOW)).ran).toBe(true);
+  });
+
+  it('does not even scan while settlements are paused, and catches up after the resume', async () => {
+    const { scheduler, receipts, settlements, pause } = build([receipt(ESCROW_A, 120_000)]);
+    pause.paused = true;
+
+    expect(await scheduler.runOnce(NOW)).toMatchObject({ ran: false, batches: 0 });
+    expect(receipts.findUnsettled).not.toHaveBeenCalled();
+
+    pause.paused = false;
+    expect(await scheduler.runOnce(NOW)).toMatchObject({ ran: true, batches: 1 });
+    expect(settlements.settleBatch).toHaveBeenCalledTimes(1);
   });
 
   it('asks for no more receipts than the configured scan limit', async () => {

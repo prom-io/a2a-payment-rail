@@ -29,6 +29,7 @@ import { FeesModule } from './modules/fees/fees.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RefundsModule } from './modules/refunds/refunds.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
+import { OpsModule } from './modules/ops/ops.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
     WebhooksModule,
     RefundsModule,
     ReconciliationModule,
+    OpsModule,
   ],
   providers: [
     {

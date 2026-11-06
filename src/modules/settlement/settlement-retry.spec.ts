@@ -5,7 +5,8 @@ import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { FeePolicyService } from '../fees/fee-policy.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import { configStub } from '../../testing/stubs';
+import { PauseService } from '../ops/pause.service';
+import { configStub, pauseStub } from '../../testing/stubs';
 import { SettlementRetryService } from './settlement-retry.service';
 import { SettlementService } from './settlement.service';
 
@@ -39,6 +40,7 @@ function build(config: Record<string, unknown> = {}) {
     assertGasWithinCap: jest.fn().mockResolvedValue(undefined),
     confirmations: 3,
   };
+  const pause = pauseStub();
   const webhooks = { emit: jest.fn().mockResolvedValue(undefined) };
   const feeLedger = { accrue: jest.fn().mockResolvedValue(null) };
   const config$ = configStub({
@@ -55,9 +57,10 @@ function build(config: Record<string, unknown> = {}) {
     new FeePolicyService(config$),
     feeLedger as unknown as FeeLedgerService,
     webhooks as unknown as WebhooksService,
+    pause as unknown as PauseService,
   );
   const mined = (hash = '0xtx') => ({ hash, wait: jest.fn().mockResolvedValue({ hash }) });
-  return { service, repo, settleBatch, provider, mined, feeLedger, webhooks, blockchain, retry: new SettlementRetryService(service, config$) };
+  return { service, repo, settleBatch, provider, mined, feeLedger, webhooks, blockchain, pause, retry: new SettlementRetryService(service, pause as unknown as PauseService, config$) };
 }
 
 const input = { escrowId: ESCROW, receiptsHash: HASH, totalAmount: '1.5' };
@@ -118,6 +121,23 @@ describe('settlement retry queue', () => {
       'settlement.failed',
       expect.objectContaining({ settlementId: rejected.id, status: 'rejected', lastError: 'EscrowHub: not active' }),
     );
+  });
+
+  it('takes no settlement, retries nothing and replays nothing while paused', async () => {
+    const { service, settleBatch, retry, repo, pause } = build();
+    settleBatch.mockRejectedValueOnce(chainError('TIMEOUT'));
+    const queued = await service.settleBatch(input);
+    repo.find.mockResolvedValue([queued]);
+
+    pause.paused = true;
+
+    await expect(service.settleBatch(input)).rejects.toMatchObject({ status: 503 });
+    expect(await retry.processDue(new Date(NOW.getTime() + 3_600_000))).toMatchObject({ ran: false, attempted: 0 });
+    expect(queued).toMatchObject({ status: SettlementStatus.RETRYING, attempts: 1 });
+    expect(settleBatch).toHaveBeenCalledTimes(1);
+
+    pause.paused = false;
+    expect((await retry.processDue(new Date(NOW.getTime() + 3_600_000))).attempted).toBe(1);
   });
 
   it('queues a transient failure with exponential backoff capped at the maximum', async () => {
