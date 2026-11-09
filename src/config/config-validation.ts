@@ -100,6 +100,12 @@ export function findUnsafeMainnetSettings(env: Env): ConfigViolation[] {
     refuse('BLOCKCHAIN_PRIVATE_KEY', 'is a published anvil/hardhat development key');
   }
 
+  const previousKey = text(env, 'BLOCKCHAIN_PREVIOUS_PRIVATE_KEY').toLowerCase();
+  if (previousKey !== '' && knownDevKeys().has(previousKey)) {
+    // During the overlap this key is still accepted as the rail's signature.
+    refuse('BLOCKCHAIN_PREVIOUS_PRIVATE_KEY', 'is a published anvil/hardhat development key');
+  }
+
   const hub = text(env, 'ESCROW_HUB_ADDRESS');
   if (!/^0x[0-9a-fA-F]{40}$/.test(hub)) {
     refuse('ESCROW_HUB_ADDRESS', 'must be set to the deployed EscrowHub address');

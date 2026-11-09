@@ -1,7 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, Matches } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, Matches, MaxLength, ValidateNested } from 'class-validator';
 
 const HASH = /^0x[a-fA-F0-9]{64}$/;
+
+export class AttestationDto {
+  @ApiProperty({ description: 'The signed message, exactly as returned with the proof' })
+  @IsString()
+  @MaxLength(1024)
+  message!: string;
+
+  @ApiProperty({ description: '65-byte signature of the message' })
+  @Matches(/^0x[a-fA-F0-9]{130}$/, { message: 'signature must be a 65-byte hex signature' })
+  signature!: string;
+}
 
 export class VerifyProofDto {
   @ApiProperty({ description: 'Receipt hash whose inclusion is being checked' })
@@ -18,4 +30,10 @@ export class VerifyProofDto {
   @ApiProperty({ description: 'Merkle root of the batch (settlement.receiptsHash)' })
   @Matches(HASH, { message: 'root must be a valid keccak-256 hex string' })
   root!: string;
+
+  @ApiProperty({ required: false, type: AttestationDto, description: 'Attestation returned with the proof' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AttestationDto)
+  attestation?: AttestationDto;
 }

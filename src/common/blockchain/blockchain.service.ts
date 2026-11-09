@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
+import { SignerKeyringService } from './signer-keyring.service';
 
 /** The part of a sent transaction the service needs in order to wait for it. */
 export interface WaitableTransaction {
@@ -19,16 +20,17 @@ export class BlockchainService implements OnModuleInit {
   private confirmationTimeoutMs = 0;
   private maxFeePerGasWei = 0n;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly keyring: SignerKeyringService,
+  ) {}
 
   onModuleInit() {
     const rpcUrl = this.configService.get<string>('blockchain.rpcUrl', 'http://localhost:8545');
-    const privateKey = this.configService.get<string>(
-      'blockchain.privateKey',
-      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-    );
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
-    this.wallet = new ethers.Wallet(privateKey, this.provider);
+    // Transactions are always signed by the keyring's current key; a key that
+    // is being rotated out is never used to send anything.
+    this.wallet = new ethers.Wallet(this.keyring.currentPrivateKey, this.provider);
 
     // Finality and fee limits come from the network profile (network.config.ts).
     this.requiredConfirmations = Math.max(this.configService.get<number>('network.confirmations', 1), 1);

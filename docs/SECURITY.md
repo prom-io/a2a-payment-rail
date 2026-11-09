@@ -19,6 +19,44 @@ Primary threats:
 | T8 | Unlogged privileged actions | `AuditInterceptor` on every mutating request |
 | T9 | Compromised or runaway payer drains its funds into escrow | Rolling spending limit per payer (`SpendingLimitService`) |
 
+## Signer key rotation
+
+The rail has one signing key (`BLOCKCHAIN_PRIVATE_KEY`): it sends every
+transaction and signs the attestation returned with a receipt inclusion proof
+(`GET /receipts/proof/:receiptHash`, field `attestation`). `SignerKeyringService`
+(`src/common/blockchain/`) rotates it with an overlap window:
+
+| variable | during a rotation |
+|---|---|
+| `BLOCKCHAIN_PRIVATE_KEY` | the new key |
+| `BLOCKCHAIN_PREVIOUS_PRIVATE_KEY` | the key being retired |
+| `SIGNER_ROTATED_AT` | ISO-8601 instant the new key took over |
+| `SIGNER_OVERLAP_SECONDS` | how long the old key stays accepted, default 86400 |
+
+After the restart the new key signs everything; the old key signs nothing. It
+is only *accepted* when verifying an attestation
+(`POST /receipts/proof/verify` with `attestation`), and only until
+`SIGNER_ROTATED_AT + SIGNER_OVERLAP_SECONDS`: attestations issued shortly
+before the switch keep verifying through the window (`role: "previous"`) and
+are refused after it (`reason: "previous_signer_expired"`). The window is
+measured from the configured instant, not from the restart, so restarting does
+not extend it.
+
+- `GET /admin/signer` (role `admin`) shows the current address and, during a
+  rotation, the previous address with `acceptedUntil`. Keys are never returned.
+- A previous key without `SIGNER_ROTATED_AT`, an unparseable instant, the same
+  key twice or a malformed key stop the service at startup; the error never
+  contains the key.
+- Once the window is over the service logs a reminder on every start to remove
+  the two rotation variables.
+
+What rotation does **not** do: it does not move on-chain rights. `EscrowHub`
+has a fixed `owner` (the deployer) and no ownership transfer, and
+`emergencyClose`, which refunds use, is owner-only. A new signer can settle
+and release (those calls are not restricted) but cannot refund on-chain until
+the hub is redeployed or upgraded with the new owner. Fund the new address
+with gas before the switch.
+
 ## Emergency pause
 
 `PauseService` (`src/modules/ops/`) stops money from leaving towards payees

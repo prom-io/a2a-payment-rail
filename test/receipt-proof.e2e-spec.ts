@@ -71,6 +71,32 @@ describe('Receipt inclusion proofs (e2e)', () => {
     }
   });
 
+  it('attests the batch root with the rail signer and verifies its own attestation', async () => {
+    const receiptHash = await postReceipt();
+    await app.get(SettlementBatchScheduler).runOnce(new Date(Date.now() + 120_000));
+    const { body } = await request(app.getHttpServer()).get(`/receipts/proof/${receiptHash}`).expect(200);
+
+    expect(body.attestation).toMatchObject({ purpose: 'receipt-batch-root' });
+    expect(body.attestation.message).toContain(`root=${body.root}`);
+    expect(body.attestation.signer).toMatch(/^0x[0-9a-fA-F]{40}$/);
+
+    const verify = (payload: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/receipts/proof/verify')
+        .send({ receiptHash, proof: body.proof, root: body.root, ...payload })
+        .expect(200);
+    const { message, signature } = body.attestation;
+
+    const ok = await verify({ attestation: { message, signature } });
+    expect(ok.body).toEqual({
+      valid: true,
+      attestation: { valid: true, signer: body.attestation.signer, role: 'current' },
+    });
+
+    const tampered = await verify({ attestation: { message: message.replace('leafCount=', 'leafCount=9'), signature } });
+    expect(tampered.body.attestation.valid).toBe(false);
+  });
+
   it('answers 409 for a receipt that is not batched yet', async () => {
     const pending = await postReceipt();
     await request(app.getHttpServer()).get(`/receipts/proof/${pending}`).expect(409);
