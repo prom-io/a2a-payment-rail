@@ -78,7 +78,10 @@ a2a-payment-rail/
 │   └── Dockerfile.dev          # hot-reload + debugger port 9229
 ├── docker-compose.dev.yml      # standalone local stack
 ├── docs/
-│   └── SECURITY.md             # threat model + controls
+│   ├── SECURITY.md             # threat model + controls
+│   ├── SETTLEMENT-PROTOCOL.md  # formats, batching, retries, fees, refunds
+│   ├── ADVANCED.md             # multi-chain, streaming v2, batching
+│   └── MAINNET-RUNBOOK.md      # launch checklist, incidents, rollback
 ├── test/                       # e2e tests (supertest)
 └── .env.example                # all required env vars with sample values
 ```

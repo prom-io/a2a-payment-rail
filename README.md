@@ -82,6 +82,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 | [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Tracing, metrics, reconciliation, alerts |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model and controls |
 | [docs/CI-CD.md](docs/CI-CD.md) | Pipelines, secrets, rollback |
+| [docs/MAINNET-RUNBOOK.md](docs/MAINNET-RUNBOOK.md) | Mainnet launch checklist, operations, incidents, rollback |
 
 ## Docker
 

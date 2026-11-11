@@ -160,9 +160,13 @@ One row per escrow is kept in `escrow_refunds` (`escrowId` is unique). A
 repeated request returns that row; if its transaction failed (`failed`,
 `lastError`), the request retries it. A session in any other status is `409`.
 With `ESCROW_HUB_ADDRESS` set the refund calls `EscrowHub.emergencyClose`, the
-owner-only function that pays `deposit - spent` back to the payer
-(`closeEscrow` is payer-only and cannot be called by the rail); without a hub
-the refund is recorded off-chain only. A completed refund stamps
+owner-only function that returns `deposit - spent` to the address that opened
+the escrow on-chain. That address is the rail's own signer: `POST /escrow`
+sends `openEscrow` and the deposit from the signer wallet, so the hub never
+sees `agentA` of the request. The remainder therefore comes back to the
+signer wallet, and the refund row is the record of what the payer is owed.
+The signer must be the hub owner for this call to succeed. Without a hub the
+refund is recorded off-chain only. A completed refund stamps
 `escrow_sessions.refundedAt` and emits `escrow.refunded`.
 
 The sweep is opt-in (`ESCROW_EXPIRY_SWEEP_ENABLED=true`): every

@@ -162,8 +162,11 @@ export class RefundsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * EscrowHub.emergencyClose pays `deposit - spent` back to the payer. The
-   * payer-only closeEscrow cannot be used here: the rail is not the payer.
+   * EscrowHub.emergencyClose returns `deposit - spent` to the address that
+   * opened the escrow on-chain. That is the rail's own signer (EscrowService
+   * sends openEscrow and the deposit), so the money comes back to the signer
+   * wallet and this row records what the payer is owed. The call is owner-only:
+   * the signer must be the address that deployed the hub.
    */
   private async execute(refund: EscrowRefund): Promise<EscrowRefund> {
     try {
