@@ -51,6 +51,17 @@ describe('startup config validation', () => {
     ]);
   });
 
+  it('refuses a database connection without a certificate check', () => {
+    const tls = { ...SAFE_MAINNET_ENV, DATABASE_SSL: 'true' };
+
+    expect(variables(tls)).toEqual([]);
+    expect(variables({ ...tls, DATABASE_SSL_REJECT_UNAUTHORIZED: 'false' })).toEqual([
+      'DATABASE_SSL_REJECT_UNAUTHORIZED',
+    ]);
+    // without TLS there is no certificate to skip
+    expect(variables({ ...SAFE_MAINNET_ENV, DATABASE_SSL_REJECT_UNAUTHORIZED: 'false' })).toEqual([]);
+  });
+
   it('reports every problem at once so one restart is enough to see them all', () => {
     let message = '';
     try {

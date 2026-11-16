@@ -12,7 +12,12 @@
     "start:prod": "node dist/main",
     "test": "jest",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "typeorm": "typeorm -d dist/common/database/data-source.js",
+    "migration:generate": "npm run build && typeorm -d dist/common/database/data-source.js migration:generate",
+    "migration:run": "typeorm -d dist/common/database/data-source.js migration:run",
+    "migration:revert": "typeorm -d dist/common/database/data-source.js migration:revert",
+    "migration:show": "typeorm -d dist/common/database/data-source.js migration:show"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

@@ -1,10 +1,60 @@
 # Database
 
-PostgreSQL through TypeORM. The schema is derived from the entities
-(`synchronize: true` in `src/config/database.config.ts`): adding a column or an
-index to an entity is the whole change, there is no migration to write. Every
-new column must therefore be nullable or carry a default, so it can be added to
-a table that already has rows.
+PostgreSQL through TypeORM. Connection settings live in
+`src/common/database/database-options.ts` and are shared by the service and the
+migration CLI, so both always talk to the same database and the same schema
+history table (`schema_migrations`).
+
+## Where the schema comes from
+
+| environment        | schema                                                        |
+|--------------------|---------------------------------------------------------------|
+| laptop, tests, CI  | schema sync from the entities (`synchronize`), the default    |
+| mainnet profile    | migrations only; sync needs MAINNET_ALLOW_SCHEMA_SYNC=true     |
+| anywhere else      | migrations when `DATABASE_SYNCHRONIZE=false`                  |
+
+Schema sync is convenient and dangerous for the same reason: it makes the
+tables match the entities, including dropping a column that an entity no
+longer has. Production databases change only through migrations.
+
+## Migrations
+
+Migrations live in `src/migrations`, one class per file, registered in
+`src/migrations/index.ts` (oldest first). The CLI reads the compiled output:
+
+```bash
+npm run migration:generate -- src/migrations/AddPayoutMemo  # builds first, diffs entities vs database
+npm run build
+npm run migration:show      # [X] applied, [ ] pending
+npm run migration:run       # applies everything pending, one transaction per migration
+npm run migration:revert    # undoes the last one
+```
+
+`migration:generate` compares the entities with the database it is pointed
+at, so point it at a database that is at the latest migration (run
+`migration:run` first, with schema sync off). Review the generated SQL, add
+the class to `index.ts`, and commit both. `src/common/database/registry.spec.ts`
+fails when an entity file or a migration file is not registered.
+
+Rules for a migration:
+
+- a new column on an existing table is nullable or has a default, so it can be
+  added to a table that already has rows;
+- `down()` really undoes `up()`, so a release can be rolled back;
+- data backfills go into their own migration, not into a schema one.
+
+Deploys run `migration:run` once, before the new version starts (the
+production image has no npm: `node node_modules/typeorm/cli.js -d
+dist/common/database/data-source.js migration:run`). A single-instance setup
+can set `DATABASE_RUN_MIGRATIONS=true` instead and let the service apply them
+on boot; with several replicas that would race.
+
+## TLS
+
+`DATABASE_SSL=true` enables TLS with certificate checks; `DATABASE_SSL_CA`
+takes the CA as PEM (literal `\n` is accepted). Skipping the check
+(`DATABASE_SSL_REJECT_UNAUTHORIZED=false`) is for a self-signed staging server
+only; the mainnet profile refuses to start with it.
 
 ## Composite indexes
 

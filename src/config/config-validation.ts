@@ -147,6 +147,13 @@ export function findUnsafeMainnetSettings(env: Env): ConfigViolation[] {
     );
   }
 
+  if (text(env, 'DATABASE_SSL') === 'true' && text(env, 'DATABASE_SSL_REJECT_UNAUTHORIZED') === 'false') {
+    refuse(
+      'DATABASE_SSL_REJECT_UNAUTHORIZED',
+      'must not switch off the certificate check of the database connection on mainnet',
+    );
+  }
+
   // --- http surface --------------------------------------------------------
   const origins = text(env, 'CORS_ORIGINS').split(',').map((origin) => origin.trim()).filter(Boolean);
   if (origins.length === 0) {

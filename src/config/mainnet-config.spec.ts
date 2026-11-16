@@ -130,6 +130,7 @@ describe('mainnet config validation: what stays allowed', () => {
     ['schema sync explicitly off', { DATABASE_SYNCHRONIZE: 'false' }],
     ['schema sync with the mainnet acknowledgement', { DATABASE_SYNCHRONIZE: 'true', MAINNET_ALLOW_SCHEMA_SYNC: 'true' }],
     ['HSTS explicitly on', { HSTS_ENABLED: 'true' }],
+    ['TLS to the database with a pinned CA', { DATABASE_SSL: 'true', DATABASE_SSL_CA: '-----BEGIN CERTIFICATE-----' }],
     ['webhooks explicitly https-only', { WEBHOOK_ALLOW_HTTP: 'false' }],
     ['a real previous signer key during a rotation', { BLOCKCHAIN_PREVIOUS_PRIVATE_KEY: '0x' + '7c'.repeat(32) }],
     ['a 32 character secret', { JWT_SECRET: 'k'.repeat(32) }],
