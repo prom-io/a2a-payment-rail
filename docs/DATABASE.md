@@ -49,6 +49,25 @@ dist/common/database/data-source.js migration:run`). A single-instance setup
 can set `DATABASE_RUN_MIGRATIONS=true` instead and let the service apply them
 on boot; with several replicas that would race.
 
+## Adopting migrations on an existing database
+
+`1794931500000-Baseline` creates the schema exactly as schema sync left it.
+A database that has been running with sync already has every table, so the
+baseline must be recorded as applied rather than run:
+
+```sql
+-- once, after `npm run migration:show` has created schema_migrations
+INSERT INTO schema_migrations ("timestamp", name) VALUES (1794931500000, 'Baseline1794931500000');
+```
+
+Before that, check that the existing schema really matches: point
+`npm run migration:generate -- src/migrations/Check` at a copy of the database
+with the row inserted. It must report "No changes in database schema were
+found"; otherwise the differences are what sync never applied, and they go
+into a migration of their own.
+
+A new, empty database simply runs `migration:run`.
+
 ## TLS
 
 `DATABASE_SSL=true` enables TLS with certificate checks; `DATABASE_SSL_CA`

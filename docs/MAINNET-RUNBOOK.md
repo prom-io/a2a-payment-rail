@@ -97,9 +97,12 @@ software.
 
 ### 3.2 First boot
 
-1. Start **one** instance with the mainnet environment plus, for this boot
-   only, `DATABASE_SYNCHRONIZE=true` and `MAINNET_ALLOW_SCHEMA_SYNC=true`, and
-   with `SETTLEMENT_BATCH_ENABLED=false`, `ESCROW_EXPIRY_SWEEP_ENABLED=false`.
+1. Create the schema on the empty mainnet database with the migrations, from
+   the image that is about to be deployed:
+   `node node_modules/typeorm/cli.js -d dist/common/database/data-source.js migration:run`.
+   `migration:show` must then list every migration as `[X]`.
+   Start **one** instance with the mainnet environment and
+   `SETTLEMENT_BATCH_ENABLED=false`, `ESCROW_EXPIRY_SWEEP_ENABLED=false`.
 2. If it exits immediately, read the log: startup validation prints
    `Refusing to start with NETWORK_PROFILE=mainnet: N unsafe setting(s)` and
    one line per variable (never the values). Fix all of them and start again.
@@ -107,8 +110,8 @@ software.
    mainnet, confirmations: 12`. The wallet must be the address that deployed
    the hub.
 4. `GET /health` answers `status: ok` with `paused.settlement: false`.
-5. Remove the two schema-sync variables and restart. From now on the service
-   does not alter tables on boot.
+5. Schema sync stays off on mainnet: every later schema change ships as a
+   migration and is applied the same way before the new version starts.
 
 ### 3.3 Smoke test with real, small value
 

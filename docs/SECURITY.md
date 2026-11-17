@@ -113,9 +113,10 @@ The error names the variables and never prints their values. An unknown
 profiles are not checked: the values refused here are the ones that make a
 development setup work without configuration.
 
-Schema sync follows the same idea: on mainnet `synchronize` is off unless
-`DATABASE_SYNCHRONIZE=true` and `MAINNET_ALLOW_SCHEMA_SYNC=true` are both set
-for the deploy that changes the schema; on the other profiles it stays on.
+Schema sync follows the same idea: on mainnet `synchronize` is off and the
+schema comes from the migrations in `src/migrations` (docs/DATABASE.md).
+`DATABASE_SYNCHRONIZE=true` together with `MAINNET_ALLOW_SCHEMA_SYNC=true` is
+still accepted as a break-glass option; on the other profiles sync stays on.
 
 ## Spending limits
 

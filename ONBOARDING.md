@@ -195,7 +195,9 @@ The deploy script writes contract addresses to stdout — copy `EscrowHub` addre
 3. Run `npm run start:dev` once locally — TypeORM `synchronize: true` (dev only) will create the table.
    New columns on an existing table must be nullable or have a default. If a query filters or sorts on the
    new entity at volume, add a named composite `@Index` and list it in `docs/DATABASE.md`.
-4. For production: generate a migration (planned — not yet wired into this repo, see "next steps").
+4. For production: generate a migration with `npm run migration:generate -- src/migrations/<Name>`
+   against a database at the latest migration, review it and register the class in
+   `src/migrations/index.ts` (see `docs/DATABASE.md`).
 
 ### Add a new contract
 
@@ -217,7 +219,6 @@ Done (Phases 0–2):
 Likely next (per the Google Sheets plan):
 
 - P3 Observability — `/metrics` (Prometheus), structured request IDs, distributed tracing.
-- P3 Migrations — replace TypeORM `synchronize` with `migrationsRun` + first migration.
 - P4 Settlement gas optimisation — batch packing, EIP-2930 access lists.
 - P4 Streaming refinements — refund flow on early termination.
 
@@ -231,5 +232,5 @@ Confirm with the owner before starting any of these — the sheet is canonical.
 | `nonce too low` from ethers | anvil was reset; restart the service so the wallet refetches its nonce. |
 | 401 on every request | JWT auth is on by default. Use `@Public()` for endpoints that don't need auth, or send a valid bearer token. |
 | 429 Too Many Requests | rate limiter triggered. Wait, or annotate the route with `@SkipThrottle()` if appropriate. |
-| Migration mismatch errors | `synchronize: true` is dev-only; once migrations land, set `NODE_ENV=production` and run them explicitly. |
+| `relation "..." does not exist` with schema sync off | migrations not applied: `npm run build && npm run migration:run`. |
 | `forge build` errors about missing `forge-std` | run `forge install` inside `contracts/` once. |

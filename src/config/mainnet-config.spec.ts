@@ -278,7 +278,15 @@ describe('.env.mainnet.example', () => {
     expect(active.DATABASE_SYNCHRONIZE).toBeUndefined();
     expect(active.MAINNET_ALLOW_SCHEMA_SYNC).toBeUndefined();
     expect(active.WEBHOOK_ALLOW_HTTP).toBeUndefined();
-    expect(commented).toEqual(expect.arrayContaining(['DATABASE_SYNCHRONIZE', 'MAINNET_ALLOW_SCHEMA_SYNC']));
+    // the schema comes from migrations; sync is not even offered as a commented option
+    expect(commented).not.toContain('DATABASE_SYNCHRONIZE');
+    expect(commented).not.toContain('MAINNET_ALLOW_SCHEMA_SYNC');
+  });
+
+  it('tells the operator how the schema is created', () => {
+    expect(readFileSync(join(REPO_ROOT, '.env.mainnet.example'), 'utf8')).toContain(
+      'dist/common/database/data-source.js migration:run',
+    );
   });
 
   it('only mentions variables the service actually reads', () => {

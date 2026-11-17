@@ -1,4 +1,5 @@
 import { MigrationInterface } from 'typeorm';
+import { Baseline1794931500000 } from './1794931500000-Baseline';
 
 /**
  * Schema migrations, oldest first.
@@ -10,4 +11,4 @@ import { MigrationInterface } from 'typeorm';
  * files, a migration deleted from git but left in dist/). `registry.spec.ts`
  * fails when a file in this directory is not listed, or listed out of order.
  */
-export const MIGRATIONS: Array<new () => MigrationInterface> = [];
+export const MIGRATIONS: Array<new () => MigrationInterface> = [Baseline1794931500000];
