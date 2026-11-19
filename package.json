@@ -17,7 +17,9 @@
     "migration:generate": "npm run build && typeorm -d dist/common/database/data-source.js migration:generate",
     "migration:run": "typeorm -d dist/common/database/data-source.js migration:run",
     "migration:revert": "typeorm -d dist/common/database/data-source.js migration:revert",
-    "migration:show": "typeorm -d dist/common/database/data-source.js migration:show"
+    "migration:show": "typeorm -d dist/common/database/data-source.js migration:show",
+    "migration:check": "typeorm -d dist/common/database/data-source.js migration:generate src/migrations/Drift --check",
+    "migration:verify": "bash scripts/check-migrations.sh"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

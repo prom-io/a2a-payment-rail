@@ -142,11 +142,59 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The suites then boot with schema sync on top of the migrated schema;
+      # the migrations job below checks that sync has nothing left to do.
       - name: Run migrations
-        run: npm run migration:run || echo "no migration script, relying on synchronize"
+        run: npm run migration:run
 
       - name: E2E
         run: npm run test:e2e -- --ci --runInBand
+
+  # Entities and committed migrations must describe the same schema. Without
+  # this job an entity change ships without its migration, CI stays green
+  # (every other job uses schema sync), and the first mainnet deploy fails on a
+  # missing column.
+  migrations:
+    name: migration drift
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: payment_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: payment_migrations
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      # Applies everything, fails on drift (the missing SQL goes to the job
+      # summary), reverts everything and applies again.
+      - name: Check migrations against the entities
+        run: npm run migration:verify
 
   contracts:
     name: contract tests
