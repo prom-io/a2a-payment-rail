@@ -8,7 +8,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { PauseService } from '../ops/pause.service';
 import { configStub, pauseStub } from '../../testing/stubs';
 import { SettlementRetryService } from './settlement-retry.service';
-import { SettlementService } from './settlement.service';
+import { SettlementService, isHubPausedRevert } from './settlement.service';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const ESCROW = '11111111-1111-4111-8111-111111111111';
@@ -66,6 +66,39 @@ function build(config: Record<string, unknown> = {}) {
 const input = { escrowId: ESCROW, receiptsHash: HASH, totalAmount: '1.5' };
 
 describe('settlement retry queue', () => {
+  it('keeps a batch queued while the hub is paused on-chain, without using up attempts', async () => {
+    const { service, settleBatch, mined, webhooks } = build();
+    const paused = Object.assign(chainError('CALL_EXCEPTION', 'execution reverted: "EscrowHub: paused"'), {
+      reason: 'EscrowHub: paused',
+    });
+    settleBatch.mockRejectedValue(paused);
+
+    const first = await service.settleBatch(input);
+    expect(first).toMatchObject({ status: SettlementStatus.RETRYING, attempts: 0 });
+    // the longest backoff: a pause is lifted by a person, not by time
+    expect(first.nextRetryAt!.getTime()).toBeGreaterThanOrEqual(Date.now() + 3_000 - 1_000);
+
+    // more failed rounds than maxAttempts (3) and still not dead-lettered
+    for (let round = 0; round < 5; round += 1) await service.attempt(first, NOW);
+    expect(first).toMatchObject({ status: SettlementStatus.RETRYING, attempts: 0 });
+    expect(first.nextRetryAt).toEqual(new Date(NOW.getTime() + 3_000));
+    expect(webhooks.emit).not.toHaveBeenCalled();
+
+    settleBatch.mockReset();
+    settleBatch.mockResolvedValue(mined('0xafter-unpause'));
+    await service.attempt(first, NOW);
+    expect(first).toMatchObject({ status: SettlementStatus.SETTLED, attempts: 1, txHash: '0xafter-unpause' });
+  });
+
+  it('recognises the paused revert however ethers reports it', () => {
+    expect(isHubPausedRevert({ reason: 'EscrowHub: paused' })).toBe(true);
+    expect(isHubPausedRevert({ shortMessage: 'execution reverted: "EscrowHub: paused"' })).toBe(true);
+    expect(isHubPausedRevert(new Error('execution reverted: "EscrowHub: paused"'))).toBe(true);
+    expect(isHubPausedRevert({ reason: 'EscrowHub: not active' })).toBe(false);
+    expect(isHubPausedRevert(null)).toBe(false);
+    expect(isHubPausedRevert('EscrowHub: paused')).toBe(false);
+  });
+
   it('settles on the first attempt and records the transaction hash', async () => {
     const { service, settleBatch, mined } = build();
     settleBatch.mockResolvedValue(mined('0xfirst'));

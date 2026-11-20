@@ -190,6 +190,11 @@ If the API or the admin credentials are what is compromised, set
 lifted through the API. Remember that a pause in this service does not stop
 anybody from calling the contract directly (limit 3).
 
+If the API itself cannot be trusted (leaked admin token, compromised host),
+stop the hub on-chain with the guardian key: `cast send $ESCROW_HUB_ADDRESS
+"pause()" --private-key $GUARDIAN_KEY`. Only the owner key lifts it
+(`unpause()`); queued settlements resume on their own afterwards.
+
 ### 5.2 Reconciliation mismatch
 
 | kind | usual meaning | first step |

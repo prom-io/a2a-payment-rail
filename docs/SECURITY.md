@@ -86,6 +86,22 @@ already sent when the pause came is not recalled.
   `ok`: a paused rail must not be restarted by an orchestrator. The gauge
   `payment_rail_paused{scope}` is `1` while a scope is paused.
 
+### On-chain: the hub guardian
+
+The API pause stops this service. `EscrowHub` has its own stop, for when the
+service is not the only thing that can call the hub, or is itself the problem:
+
+- `guardian` (the deployer at first, then `setGuardian` by the owner, typically
+  a monitoring key or a fast multisig) and the owner can call `pause()`;
+- only the owner can `unpause()`. A stolen guardian key can freeze payouts and
+  nothing more;
+- while paused, `openEscrow`, `settleBatch` and `claimStream` revert with
+  `EscrowHub: paused`; `closeEscrow` and `emergencyClose` keep working, so a
+  payer always gets the rest of the deposit back;
+- the service treats that revert as a wait, not as a verdict on the batch: the
+  settlement stays `retrying` (at the longest backoff, without using up an
+  attempt) and goes through after the unpause.
+
 ## Startup validation (mainnet)
 
 `ConfigModule` runs `validateConfig` (`src/config/config-validation.ts`)

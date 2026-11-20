@@ -4,8 +4,21 @@ pragma solidity ^0.8.24;
 contract EscrowHub {
     address public owner;
 
+    /// @notice May stop the hub in an emergency, and nothing else. Lifting the
+    /// stop is the owner's call: a compromised guardian key can at worst
+    /// freeze payouts, never resume them or move funds.
+    address public guardian;
+    /// @notice While true no escrow is opened and nothing is paid to a payee.
+    /// Payers can still close their escrows and get the rest back.
+    bool public paused;
+
     modifier onlyOwner() {
         require(msg.sender == owner, "EscrowHub: not owner");
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!paused, "EscrowHub: paused");
         _;
     }
 
@@ -47,9 +60,36 @@ contract EscrowHub {
     );
     event EscrowClosed(bytes32 indexed escrowId, uint256 refund);
     event EscrowDisputed(bytes32 indexed escrowId);
+    event Paused(address indexed by);
+    event Unpaused(address indexed by);
+    event GuardianChanged(address indexed previousGuardian, address indexed newGuardian);
 
     constructor() {
         owner = msg.sender;
+        guardian = msg.sender;
+        emit GuardianChanged(address(0), msg.sender);
+    }
+
+    /// @notice Hands the guardian role to another address, typically a
+    /// monitoring key or a multisig that can act faster than the owner.
+    /// The zero address disables the role; the owner can still pause.
+    function setGuardian(address newGuardian) external onlyOwner {
+        emit GuardianChanged(guardian, newGuardian);
+        guardian = newGuardian;
+    }
+
+    /// @notice Emergency stop of openEscrow, settleBatch and claimStream.
+    function pause() external {
+        require(msg.sender == guardian || msg.sender == owner, "EscrowHub: not guardian");
+        require(!paused, "EscrowHub: already paused");
+        paused = true;
+        emit Paused(msg.sender);
+    }
+
+    function unpause() external onlyOwner {
+        require(paused, "EscrowHub: not paused");
+        paused = false;
+        emit Unpaused(msg.sender);
     }
 
     function openEscrow(
@@ -58,7 +98,7 @@ contract EscrowHub {
         uint256 budgetLimit,
         bool verificationRequired,
         uint256 ttl
-    ) external payable {
+    ) external payable whenNotPaused {
         require(escrows[escrowId].createdAt == 0, "EscrowHub: already exists");
         require(msg.value > 0, "EscrowHub: deposit required");
         require(agentB != address(0), "EscrowHub: invalid agentB");
@@ -90,7 +130,7 @@ contract EscrowHub {
         bytes32 escrowId,
         bytes32 receiptsHash,
         uint256 totalAmount
-    ) external {
+    ) external whenNotPaused {
         EscrowSession storage session = escrows[escrowId];
         require(session.active, "EscrowHub: not active");
         require(!session.disputed, "EscrowHub: disputed");
@@ -114,7 +154,7 @@ contract EscrowHub {
         emit BatchSettled(escrowId, receiptsHash, totalAmount);
     }
 
-    function claimStream(bytes32 escrowId, uint256 usageDelta) external {
+    function claimStream(bytes32 escrowId, uint256 usageDelta) external whenNotPaused {
         EscrowSession storage session = escrows[escrowId];
         require(session.active, "EscrowHub: not active");
         require(!session.disputed, "EscrowHub: disputed");

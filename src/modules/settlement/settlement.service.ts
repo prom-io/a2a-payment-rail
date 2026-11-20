@@ -26,6 +26,19 @@ export interface SettleBatchInput {
 // A revert is the contract's final answer for this batch: sending the same
 // call again burns gas and reverts again.
 const NON_RETRYABLE_CODES = new Set(['CALL_EXCEPTION', 'INVALID_ARGUMENT', 'UNSUPPORTED_OPERATION']);
+/**
+ * Revert reason of EscrowHub while its guardian has stopped it. Unlike any
+ * other revert it says nothing about the batch: the same call goes through
+ * once the owner unpauses the hub.
+ */
+export const HUB_PAUSED_REASON = 'EscrowHub: paused';
+
+export function isHubPausedRevert(error: unknown): boolean {
+  const candidate = error as { reason?: unknown; shortMessage?: unknown; message?: unknown } | null;
+  return [candidate?.reason, candidate?.shortMessage, candidate?.message].some(
+    (text) => typeof text === 'string' && text.includes(HUB_PAUSED_REASON),
+  );
+}
 const MAX_ERROR_LENGTH = 500;
 
 @Injectable()
@@ -76,6 +89,7 @@ export class SettlementService {
    * One on-chain attempt. Never throws: the outcome is written to the row.
    *
    *   success             -> settled
+   *   hub paused          -> retrying, without using up an attempt
    *   revert              -> rejected (final, replay is manual)
    *   transient failure   -> retrying with exponential backoff, and
    *                          dead_letter once the attempts are used up
@@ -104,6 +118,15 @@ export class SettlementService {
     } catch (error: any) {
       settlement.lastError = String(error?.message ?? error).slice(0, MAX_ERROR_LENGTH);
       settlement.nextRetryAt = null;
+      if (isHubPausedRevert(error)) {
+        // The guardian stopped the hub on-chain. Keep the batch queued until
+        // the owner lifts it; a pause can outlast every attempt we have.
+        settlement.attempts -= 1;
+        settlement.status = SettlementStatus.RETRYING;
+        settlement.nextRetryAt = new Date(now.getTime() + this.maxDelayMs);
+        this.logger.warn(`EscrowHub is paused on-chain; settlement ${settlement.id} waits for the unpause`);
+        return await this.settlementRepo.save(settlement);
+      }
       if (NON_RETRYABLE_CODES.has(error?.code)) {
         settlement.status = SettlementStatus.REJECTED;
       } else if (settlement.attempts >= this.maxAttempts) {
