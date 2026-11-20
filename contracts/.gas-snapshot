@@ -1,5 +1,5 @@
 EscrowHubPauseTest:testFuzz_onlyGuardianOrOwnerCanPause(address) (runs: 256, μ: 42112, ~: 42112)
-EscrowHubPauseTest:test_deployerStartsAsGuardianAndUnpaused() (gas: 11499)
+EscrowHubPauseTest:test_deployerStartsAsGuardianAndUnpaused() (gas: 1216624)
 EscrowHubPauseTest:test_guardianCanPause() (gas: 42740)
 EscrowHubPauseTest:test_onlyOwnerSetsGuardian() (gas: 111098)
 EscrowHubPauseTest:test_onlyOwnerUnpauses() (gas: 99980)
